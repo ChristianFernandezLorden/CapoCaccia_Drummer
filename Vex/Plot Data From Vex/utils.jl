@@ -1,5 +1,5 @@
 using Statistics
-const read_lib = joinpath(@__DIR__, "lib_read_lib.so")
+const read_lib = joinpath(@__DIR__, "read_vex_lib.so")
 
 
 # old read way

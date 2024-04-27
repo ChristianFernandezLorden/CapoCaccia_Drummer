@@ -1,14 +1,12 @@
 #include <string.h>
 
 #include "fast_tanh.h"
-#include "hco.h"
+#include "hco_process.h"
 #include "vex.h"
 
 static double voltage = 0;
 static double angle = 0;
 static double speed = 0;
-static double feed1_com = 0;
-static double feed2_com = 0;
 
 static double smoothing_filter[SMOOTHING_PERIOD];
 static double filter_sum = 0;
@@ -28,12 +26,11 @@ using namespace vex;
  * output : double vector of length 1
  */
 
-void dyn_system_hco(double *input, double *state, double *dstate, double *output)
+void dyn_system_hco_process(double *input, double *state, double *dstate, double *output)
 {
 	// Named Constants
 	double gfm = -2.0;
 	double gsp = 6.0;
-	double gsm = -5.0;
 	double gup = 5.0;
 	double dfm = 0.0;
 	double dsp = 0.5;
@@ -43,77 +40,89 @@ void dyn_system_hco(double *input, double *state, double *dstate, double *output
 	double tau_V_inv = 1000.0;
 	double tau_vf_inv = 1000.0;
 	double tau_vs_inv = 25.0;
-	double tau_vu_inv = 2.5;
+	double tau_vu_inv = 1.25;
 	double tau_vsyn_out_inv = 25.0;
 	double gsyn = -1.0;
 	double dsyn = 0.0;
 	double tau_vsyn_inv = 25.0;
+	double gspeed = 10.0;
+	double gpos = 20.0;
+	double dpos = 0.1;
+	double Kfeed = 1.0;
 
 	// Input reading
-	double feed1 = input[0];
-	double feed2 = input[1];
-	double Iapp = input[2];
-	double gsyn_out = input[3];
-	double dsyn_out = input[4];
+	double pos = input[0];
+	double speed = input[1];
+	double gsm = input[2];
+	double Iapp = input[3];
+	double gsyn_out = input[4];
+	double dsyn_out = input[5];
 
 	// State reading
 	double synapse_out_1_s_1 = state[10];
-	double synapse_out_2_s_1 = state[11];
-	double synapse1_s_1 = state[8];
 	double neuron2_s_1 = state[4];
 	double neuron2_s_2 = state[5];
 	double neuron2_s_3 = state[6];
 	double neuron2_s_4 = state[7];
+	double synapse_out_2_s_1 = state[11];
+	double synapse1_s_1 = state[8];
+	double synapse2_s_1 = state[9];
 	double neuron1_s_1 = state[0];
 	double neuron1_s_2 = state[1];
 	double neuron1_s_3 = state[2];
 	double neuron1_s_4 = state[3];
-	double synapse2_s_1 = state[9];
 
 	// Output Computing
-	double synapse_out_1_i_1 = (gsyn_out * ((fast_tanh(((synapse_out_1_s_1 - dsyn_out) * 2.0)) + 1.0) * 0.5));
-	double synapse_out_2_i_1 = (gsyn_out * ((fast_tanh(((synapse_out_2_s_1 - dsyn_out) * 2.0)) + 1.0) * 0.5));
-	double synapse1_i_1 = (gsyn * ((fast_tanh(((synapse1_s_1 - dsyn) * 2.0)) + 1.0) * 0.5));
+	double synapse_out_1_i_1 = (gsyn_out * ((fast_tanh(((synapse_out_1_s_1 - dsyn_out) * (2.0))) + (1.0)) * (0.5)));
 	double neuron2_i_1 = (gfm * (fast_tanh((neuron2_s_2 - dfm)) - fast_tanh((V0 - dfm))));
 	double neuron2_i_2 = (gsp * (fast_tanh((neuron2_s_3 - dsp)) - fast_tanh((V0 - dsp))));
 	double neuron2_i_3 = (gsm * (fast_tanh((neuron2_s_3 - dsm)) - fast_tanh((V0 - dsm))));
 	double neuron2_i_4 = (gup * (fast_tanh((neuron2_s_4 - dup)) - fast_tanh((V0 - dup))));
+	double synapse_out_2_i_1 = (gsyn_out * ((fast_tanh(((synapse_out_2_s_1 - dsyn_out) * (2.0))) + (1.0)) * (0.5)));
+	double synapse1_i_1 = (gsyn * ((fast_tanh(((synapse1_s_1 - dsyn) * (2.0))) + (1.0)) * (0.5)));
+	double synapse2_i_1 = (gsyn * ((fast_tanh(((synapse2_s_1 - dsyn) * (2.0))) + (1.0)) * (0.5)));
+	double feedback_i_1 = sin(pos);
+	double feedback_i_2 = fast_tanh((gspeed * speed));
+	double feedback_i_3 = ((fast_tanh((gpos * (feedback_i_1 + dpos))) - fast_tanh((gpos * (feedback_i_1 - dpos)))) * (0.5));
+	double feedback_i_4 = (Kfeed * (feedback_i_3 + ((((1.0) - feedback_i_2) * (0.5)) - (1.0))));
+	double feedback_i_5 = (Kfeed * (feedback_i_3 + ((((1.0) + feedback_i_2) * (0.5)) - (1.0))));
 	double neuron1_i_1 = (gfm * (fast_tanh((neuron1_s_2 - dfm)) - fast_tanh((V0 - dfm))));
 	double neuron1_i_2 = (gsp * (fast_tanh((neuron1_s_3 - dsp)) - fast_tanh((V0 - dsp))));
 	double neuron1_i_3 = (gsm * (fast_tanh((neuron1_s_3 - dsm)) - fast_tanh((V0 - dsm))));
 	double neuron1_i_4 = (gup * (fast_tanh((neuron1_s_4 - dup)) - fast_tanh((V0 - dup))));
-	double adder_i_1 = (Iapp + (synapse1_i_1 + feed1));
-	double adder_i_3 = gsyn_out * (((fast_tanh(((neuron1_s_1 - dsyn_out) * 2.0)) + 1.0) * 0.5) - (((fast_tanh(((neuron2_s_1 - dsyn_out) * 2.0)) + 1.0) * 0.5)));
-	double synapse2_i_1 = (gsyn * ((fast_tanh(((synapse2_s_1 - dsyn) * 2.0)) + 1.0) * 0.5));
-	double adder_i_2 = (Iapp + (synapse2_i_1 + feed2));
+	double adder_i_1 = (Iapp + (synapse1_i_1 + feedback_i_4));
+	double adder_i_2 = (Iapp + (synapse2_i_1 + feedback_i_5));
+	double adder_i_3 = (synapse_out_1_i_1 - synapse_out_2_i_1);
 
 	// Derivative Computing
 	dstate[10] = (tau_vsyn_out_inv * (neuron1_s_1 - synapse_out_1_s_1));
-	dstate[11] = (tau_vsyn_out_inv * (neuron2_s_1 - synapse_out_2_s_1));
-	dstate[8] = (tau_vsyn_inv * (neuron1_s_1 - synapse1_s_1));
-	dstate[4] = (tau_V_inv * ((((((V0 + adder_i_1) - neuron2_i_1) - neuron2_i_2) - neuron2_i_3) - neuron2_i_4) - neuron2_s_1));
+	dstate[6] = (tau_vs_inv * (neuron2_s_1 - neuron2_s_3));
 	dstate[5] = (tau_vf_inv * (neuron2_s_1 - neuron2_s_2));
 	dstate[7] = (tau_vu_inv * (neuron2_s_1 - neuron2_s_4));
-	dstate[6] = (tau_vs_inv * (neuron2_s_1 - neuron2_s_3));
+	dstate[4] = (tau_V_inv * ((((((V0 + adder_i_1) - neuron2_i_1) - neuron2_i_2) - neuron2_i_3) - neuron2_i_4) - neuron2_s_1));
+	dstate[11] = (tau_vsyn_out_inv * (neuron2_s_1 - synapse_out_2_s_1));
+	dstate[8] = (tau_vsyn_inv * (neuron1_s_1 - synapse1_s_1));
+	dstate[9] = (tau_vsyn_inv * (neuron2_s_1 - synapse2_s_1));
 	dstate[1] = (tau_vf_inv * (neuron1_s_1 - neuron1_s_2));
 	dstate[0] = (tau_V_inv * ((((((V0 + adder_i_2) - neuron1_i_1) - neuron1_i_2) - neuron1_i_3) - neuron1_i_4) - neuron1_s_1));
-	dstate[2] = (tau_vs_inv * (neuron1_s_1 - neuron1_s_3));
 	dstate[3] = (tau_vu_inv * (neuron1_s_1 - neuron1_s_4));
-	dstate[9] = (tau_vsyn_inv * (neuron2_s_1 - synapse2_s_1));
+	dstate[2] = (tau_vs_inv * (neuron1_s_1 - neuron1_s_3));
 
 	// Output Setting
 	output[0] = adder_i_3;
+	output[1] = neuron1_s_1;
+	output[2] = neuron2_s_1;
 }
 
 
-void hco_init() {
+void hco_process_init() {
 	for (int i = 0; i < SMOOTHING_PERIOD; i++)
 	{
 		smoothing_filter[i] = 0;
 	}
 }
 
-void hco_create_header_file()
+void hco_process_create_header_file()
 {
 	char text[10000];
 
@@ -131,9 +140,9 @@ void hco_create_header_file()
 						  nb_char * sizeof(char));
 }
 
-double hco_system_update()
+double hco_process_system_update()
 {
-	angle = (SpeedSensor.position(deg) * M_PI / 180.0);
+	double tmp_angle = (SpeedSensor.position(deg) * M_PI / 180.0);
 	double tmp_speed = SpeedSensor.velocity(rpm) * M_PI / 30.0;
 
 	filter_sum -= smoothing_filter[filter_ind];
@@ -142,29 +151,20 @@ double hco_system_update()
 
 	filter_ind = (filter_ind + 1) % SMOOTHING_PERIOD;
 
-	speed = filter_sum / SMOOTHING_PERIOD;
+	double smooth_speed = filter_sum / SMOOTHING_PERIOD;
 
-	double tmp_feed1_com = 0;
-	double tmp_feed2_com = 0;
-	if (speed < 0.1 && speed > -0.1)
-	{
-		if (angle > 0.1) {
-			tmp_feed1_com = 1;
-		} else if (angle < 0.1) {
-			tmp_feed2_com = 1;
-		}
-	}
+	
 
 	lock.lock();
 	double tmp_voltage = voltage;
-	feed1_com = tmp_feed1_com;
-	feed2_com = tmp_feed2_com;
+	angle = tmp_angle;
+	speed = smooth_speed;
 	lock.unlock();
 
 	return tmp_voltage;
 }
 
-void hco_system_record(int count)
+void hco_process_system_record(int count)
 {
 	double torque = PendulumMotor.torque(Nm);
 	double voltage_mot = PendulumMotor.voltage(volt);
@@ -186,12 +186,12 @@ void hco_system_record(int count)
 	lock.unlock();
 }
 
-void hco_setup(int *nb_state, int *nb_input, int *nb_output,
-					  double **input, double **state, double **state2, double **dstate, double **dstate2, double **output) 
+void hco_process_setup(int *nb_state, int *nb_input, int *nb_output,
+					  double **input, double **state, double **state2, double **dstate, double **dstate2, double **output)
 {
 	*nb_state = 12;
-	*nb_input = 5;
-	*nb_output = 1;
+	*nb_input = 6;
+	*nb_output = 3;
 
 	*input = (double *)malloc(*nb_input * sizeof(double));
 	*state = (double *)malloc(*nb_state * sizeof(double));
@@ -213,28 +213,37 @@ void hco_setup(int *nb_state, int *nb_input, int *nb_output,
 	(*state)[10] = 0;
 	(*state)[11] = 0;
 
-	(*input)[0] = 0; // Iapp
-	(*input)[1] = 0; // Iapp
+	(*input)[0] = 0; // angle
+	(*input)[1] = 0; // speed
 
-	(*input)[2] = -2; // Iapp
+	(*input)[2] = -3.5; // gsm
 
-	(*input)[3] = 6000.0; // gsyn
-	(*input)[4] = 0.0;	  // dsyn
+	(*input)[3] = -2; // Iapp
+
+	(*input)[4] = 12000.0; // gsyn
+	(*input)[5] = 0.0;	  // dsyn
 }
 
-void hco_sim_com(double *input, double *output) 
+void hco_process_sim_com(double *input, double *output) 
 {
+	double tmp_volt = 0.0;
+	if (output[1] > 0 && output[2] < 0) {
+		tmp_volt = -10000.0;
+	} else if (output[1] < 0 && output[2] > 0) {
+		tmp_volt = 10000.0;
+	}
 	lock.lock();
 
-	input[0] = feed2_com;
-	input[1] = feed1_com;
+	input[0] = angle;
+	input[1] = speed;
 
-	voltage = output[0];
+	//voltage = output[0];
+	voltage = tmp_volt;
 
 	lock.unlock();
 }
 
-void hco_sim_record(double *input, double *state, double *dstate, double *output, int count)
+void hco_process_sim_record(double *input, double *state, double *dstate, double *output, int count)
 {
 	int offset = NB_CHANNEL_SYSTEM * count;
 

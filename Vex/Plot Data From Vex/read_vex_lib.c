@@ -7,16 +7,19 @@
 #define FLOAT_SIZE sizeof(float)
 #define DOUBLE_SIZE sizeof(double)
 
-void readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
-void readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
-void readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
-void readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
+static int readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
+static int readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
+static int readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
+static int readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
 
 double *binaryToVector(const char *inputFile, unsigned long long *size, unsigned long long *nb_col)
 {
     uint8_t byte_buffer[BUFFER_LEN];
     void *buffer = (void*) (byte_buffer);
 
+    // Set error values as default
+    size[0] = -1;
+    nb_col[0] = -1;
 
     FILE *ptr;
     ptr = fopen(inputFile, "rb"); // r for read, b for binary
@@ -38,9 +41,10 @@ double *binaryToVector(const char *inputFile, unsigned long long *size, unsigned
     
     size_t read = fread(byte_buffer, 1, 3, ptr);
 
-    size_t endianness = (size_t) (byte_buffer[0]);
-    size_t number_size = (size_t) (byte_buffer[1]);
-    size_t nb_channel = (size_t)(byte_buffer[2]);
+    // Read the three byte header containing the info on the file
+    size_t endianness = (size_t) (byte_buffer[0]); // Endianness of the vex controller (1 = big endian, 0 = little endian)
+    size_t number_size = (size_t) (byte_buffer[1]); // Size of a number in byte (only 4 and 8 bytes are currently supported)
+    size_t nb_channel = (size_t)(byte_buffer[2]); // Number of colomns of the file 
     int inverse = 0;
     {
         unsigned int i = 1;
@@ -71,18 +75,18 @@ double *binaryToVector(const char *inputFile, unsigned long long *size, unsigned
 
     if (number_size != FLOAT_SIZE && number_size != DOUBLE_SIZE)
     { // Do no treat unsupported sizes
-        fprintf(stderr, "Double size of %d bytes is not supported.\n", number_size);
+        fprintf(stderr, "Double size of %d bytes is not supported.\n", (int) number_size);
         return NULL;
     }
 
     if ((file_size - 3) % (number_size * nb_channel) != 0)
     {
-        fprintf(stderr, "Corrected file size (%d B) indicates an non integrer number of doubles (%d B).\n", file_size - 3, number_size);
+        fprintf(stderr, "Corrected file size (%d B) indicates an non integrer number of doubles (%d B).\n", (int) file_size - 3, (int) number_size);
         return NULL;
     }
 
     size_t nb_elem = (file_size - 3)/number_size;
-    double *output_arr = malloc(nb_elem * sizeof(double));
+    double *output_arr = malloc(nb_elem * DOUBLE_SIZE);
     if (output_arr == NULL)
     {
         fprintf(stderr, "Allocation of vector failed");
@@ -91,28 +95,39 @@ double *binaryToVector(const char *inputFile, unsigned long long *size, unsigned
 
     if (number_size == FLOAT_SIZE)
     {
-        if (inverse) 
-            readFloatInv(buffer, output_arr, ptr, read_size, nb_elem);
-        else
-            readFloat(buffer, output_arr, ptr, read_size, nb_elem);
+        if (inverse) {
+            if(!readFloatInv(buffer, output_arr, ptr, read_size, nb_elem)) {
+                return NULL;
+            }
+        } else { 
+            if (!readFloat(buffer, output_arr, ptr, read_size, nb_elem)){
+                return NULL;
+            }
+        }
     }
     if (number_size == DOUBLE_SIZE)
     {
-        if (inverse)
-            readDoubleInv(buffer, output_arr, ptr, read_size, nb_elem);
-        else
-            readDouble(buffer, output_arr, ptr, read_size, nb_elem);
+        if (inverse) {
+            if(!readDoubleInv(buffer, output_arr, ptr, read_size, nb_elem)) {
+                return NULL;
+            }
+        } else { 
+            if (!readDouble(buffer, output_arr, ptr, read_size, nb_elem)){
+                return NULL;
+            }
+        }
     }
 
     fclose(ptr);
 
+    // Set correct values
     size[0] = nb_elem;
     nb_col[0] = nb_channel;
 
     return output_arr;
 }
 
-void readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
+int readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
 {
     size_t read = fread(buffer, FLOAT_SIZE, read_size, ptr);
     size_t count = 0;
@@ -121,7 +136,7 @@ void readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, si
         if (count + read >= file_size)
         {
             fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
-            return NULL;
+            return 0;
         }
         for (int i = 0; i < read; i++)
         {                                            // Convert to different pointer then read
@@ -131,9 +146,10 @@ void readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, si
         }
         read = fread(buffer, FLOAT_SIZE, read_size, ptr);
     }
+    return 1;
 }
 
-void readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
+int readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
 {
     size_t read = fread(buffer, FLOAT_SIZE, read_size, ptr);
     size_t count = 0;
@@ -142,7 +158,7 @@ void readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size,
         if (count + read >= file_size)
         {
             fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
-            return NULL;
+            return 0;
         }
         for (int i = 0; i < read; i++)
         {                                                // Convert to different pointer then read
@@ -154,9 +170,10 @@ void readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size,
         }
         read = fread(buffer, FLOAT_SIZE, read_size, ptr);
     }
+    return 1;
 }
 
-void readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
+int readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
 {
     size_t read = fread(buffer, DOUBLE_SIZE, read_size, ptr);
     size_t count = 0;
@@ -165,7 +182,7 @@ void readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, s
         if (count + read >= file_size)
         {
             fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
-            return NULL;
+            return 0;
         }
         for (int i = 0; i < read; i++)
         { // Convert to different pointer then read
@@ -174,9 +191,10 @@ void readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, s
         }
         read = fread(buffer, DOUBLE_SIZE, read_size, ptr);
     }
+    return 1;
 }
 
-void readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
+int readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
 {
     size_t read = fread(buffer, DOUBLE_SIZE, read_size, ptr);
     size_t count = 0;
@@ -185,7 +203,7 @@ void readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size
         if (count + read >= file_size)
         {
             fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
-            return NULL;
+            return 0;
         }
         for (int i = 0; i < read; i++)
         {                                              // Convert to different pointer then read
@@ -196,6 +214,7 @@ void readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size
         }
         read = fread(buffer, DOUBLE_SIZE, read_size, ptr);
     }
+    return 1;
 }
 
 void freeVector(double* vector) {

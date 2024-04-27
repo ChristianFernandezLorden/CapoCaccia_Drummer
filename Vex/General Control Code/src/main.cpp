@@ -17,8 +17,8 @@
 // PendulumMotor        motor         1
 // ---- END VEXCODE CONFIGURED DEVICES ----
 
-// This include changes which test is done
-#include "hco.h"
+// This include directive controls which test is done
+#include "hco_process.h"
 
 
 #include "vex.h"
