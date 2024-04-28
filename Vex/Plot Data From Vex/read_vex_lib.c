@@ -2,49 +2,54 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// Relative to file format
+#define HEADER_SIZE 3 
+
+// Arbitrary number determining the number of bytes in the read buffer.
 #define BUFFER_LEN 10000
 
+// Shortcuts
 #define FLOAT_SIZE sizeof(float)
 #define DOUBLE_SIZE sizeof(double)
 
-static int readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
-static int readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
-static int readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
-static int readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
+static inline int readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
+static inline int readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
+static inline int readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
+static inline int readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size);
 
-double *binaryToVector(const char *inputFile, unsigned long long *size, unsigned long long *nb_col)
+double *binaryfileToVector(const char *inputFile, unsigned long long *size, unsigned long long *nb_col)
 {
-    uint8_t byte_buffer[BUFFER_LEN];
-    void *buffer = (void*) (byte_buffer);
+    uint8_t byte_buffer[BUFFER_LEN];        // Create a read buffer
+    void *buffer = (void*) (byte_buffer);   // Declare the void* 
 
     // Set error values as default
-    size[0] = -1;
-    nb_col[0] = -1;
+    size[0] = 0;
+    nb_col[0] = 0;
 
     FILE *ptr;
-    ptr = fopen(inputFile, "rb"); // r for read, b for binary
+    ptr = fopen(inputFile, "rb");   // r for read, b for binary
 
-    fseek(ptr, 0, SEEK_END); // seek to end of file
-    long file_size = ftell(ptr);       // get current file pointer aka size
-    fseek(ptr, 0, SEEK_SET); // seek back to beginning of file
+    fseek(ptr, 0, SEEK_END);        // Put file ptr at the end of the file
+    long file_size = ftell(ptr);    // get current file pointer position aka size in bytes
+    fseek(ptr, 0, SEEK_SET);        // seek back to beginning of file for reading data
 
     if (file_size == 0)
     {
-        fprintf(stderr, "File does not exist\n");
+        fprintf(stderr, "File \"%s\" does not exist.\n", inputFile);
         return NULL;
     }
-    if (file_size < 3)
+    if (file_size < HEADER_SIZE)
     {
-        fprintf(stderr, "File too small\n");
+        fprintf(stderr, "File is too small to contain the required header.\n");
         return NULL;
     }
     
     size_t read = fread(byte_buffer, 1, 3, ptr);
 
     // Read the three byte header containing the info on the file
-    size_t endianness = (size_t) (byte_buffer[0]); // Endianness of the vex controller (1 = big endian, 0 = little endian)
-    size_t number_size = (size_t) (byte_buffer[1]); // Size of a number in byte (only 4 and 8 bytes are currently supported)
-    size_t nb_channel = (size_t)(byte_buffer[2]); // Number of colomns of the file 
+    size_t endianness = (size_t) (byte_buffer[0]);  // Endianness of the device that has written the file (1 = big endian, 0 = little endian)
+    size_t number_size = (size_t) (byte_buffer[1]); // Size of the float number representation in bytes (only 4 and 8 bytes representation are currently supported)
+    size_t nb_channel = (size_t) (byte_buffer[2]);  // Number of columns in the file 
     int inverse = 0;
     {
         unsigned int i = 1;
@@ -66,30 +71,30 @@ double *binaryToVector(const char *inputFile, unsigned long long *size, unsigned
     }
 
     size_t read_size = BUFFER_LEN / (number_size); // Number of doubles that can be read at once
-    //size_t size = number_size * (nb_channel);
-    if (read_size * number_size > BUFFER_LEN)
+
+    if (read_size * number_size > BUFFER_LEN) // By properties of integer division, this should not happen
     {
-        fprintf(stderr, "Size computation failed");
+        fprintf(stderr, "Max read size computation failed, reaching a read size greater than buffer size.\n");
         return NULL;
     }
 
     if (number_size != FLOAT_SIZE && number_size != DOUBLE_SIZE)
-    { // Do no treat unsupported sizes
+    { // Do not treat unsupported sizes
         fprintf(stderr, "Double size of %d bytes is not supported.\n", (int) number_size);
         return NULL;
     }
 
-    if ((file_size - 3) % (number_size * nb_channel) != 0)
+    if ((file_size - HEADER_SIZE) % (number_size * nb_channel) != 0)
     {
-        fprintf(stderr, "Corrected file size (%d B) indicates an non integrer number of doubles (%d B).\n", (int) file_size - 3, (int) number_size);
+        fprintf(stderr, "Corrected file size (%d B) indicates a non integrer number of rows (%d B per row).\n", (int)(file_size - HEADER_SIZE), (int)(number_size * nb_channel));
         return NULL;
     }
 
-    size_t nb_elem = (file_size - 3)/number_size;
+    size_t nb_elem = (file_size - HEADER_SIZE) / number_size;
     double *output_arr = malloc(nb_elem * DOUBLE_SIZE);
     if (output_arr == NULL)
     {
-        fprintf(stderr, "Allocation of vector failed");
+        fprintf(stderr, "Allocation of vector with a size of %.2lf MB failed.\n", (nb_elem * DOUBLE_SIZE)/1048576.0);
         return NULL;
     }
 
@@ -127,6 +132,13 @@ double *binaryToVector(const char *inputFile, unsigned long long *size, unsigned
     return output_arr;
 }
 
+void freeVector(double *vector)
+{
+    free(vector);
+}
+
+/* Static functions */
+
 int readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, size_t file_size)
 {
     size_t read = fread(buffer, FLOAT_SIZE, read_size, ptr);
@@ -135,13 +147,12 @@ int readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, siz
     {
         if (count + read >= file_size)
         {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
+            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.\n");
             return 0;
         }
-        for (int i = 0; i < read; i++)
-        {                                            // Convert to different pointer then read
-            //uint32_t byte_val = ((uint32_t *)buffer)[i]; // Cast then read
-            output_arr[count] = (double) (((float *)buffer)[i]); // Dark magic pointer conversion
+        for (size_t i = 0; i < read; i++)
+        {                                            
+            output_arr[count] = (double)(((float *)buffer)[i]); // Cast then read
             count++;
         }
         read = fread(buffer, FLOAT_SIZE, read_size, ptr);
@@ -157,14 +168,14 @@ int readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, 
     {
         if (count + read >= file_size)
         {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
+            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.\n");
             return 0;
         }
-        for (int i = 0; i < read; i++)
-        {                                                // Convert to different pointer then read
-            uint32_t byte_val = ((uint32_t *)buffer)[i]; // Cast then read
-            byte_val = __builtin_bswap32(byte_val); // Swap bytes
-            output_arr[count] = (double)(*(float *)(&byte_val)); // Dark magic pointer conversion
+        for (size_t i = 0; i < read; i++)
+        {                                                
+            uint32_t byte_val = ((uint32_t *)buffer)[i];            // Cast then read
+            byte_val = __builtin_bswap32(byte_val);                 // Swap bytes
+            output_arr[count] = (double)(*(float *)(&byte_val));    // Dark magic pointer conversion
 
             count++;
         }
@@ -181,12 +192,12 @@ int readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, si
     {
         if (count + read >= file_size)
         {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
+            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.\n");
             return 0;
         }
-        for (int i = 0; i < read; i++)
-        { // Convert to different pointer then read
-            output_arr[count] = ((double *)buffer)[i]; // Dark magic pointer conversion
+        for (size_t i = 0; i < read; i++)
+        { 
+            output_arr[count] = ((double *)buffer)[i]; // Cast then read
             count++;
         }
         read = fread(buffer, DOUBLE_SIZE, read_size, ptr);
@@ -202,14 +213,14 @@ int readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size,
     {
         if (count + read >= file_size)
         {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
+            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.\n");
             return 0;
         }
-        for (int i = 0; i < read; i++)
-        {                                              // Convert to different pointer then read
-            uint64_t byte_val = ((uint64_t *)buffer)[i]; // Cast then read
-            byte_val = __builtin_bswap64(byte_val);      // Swap bytes
-            output_arr[count] = *((double *)&byte_val);   // Dark magic pointer conversion
+        for (size_t i = 0; i < read; i++)
+        {                                           
+            uint64_t byte_val = ((uint64_t *)buffer)[i];    // Cast then read
+            byte_val = __builtin_bswap64(byte_val);         // Swap bytes
+            output_arr[count] = *((double *)&byte_val);     // Dark magic pointer conversion
             count++;
         }
         read = fread(buffer, DOUBLE_SIZE, read_size, ptr);
@@ -217,42 +228,3 @@ int readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size,
     return 1;
 }
 
-void freeVector(double* vector) {
-    free(vector);
-}
-
-/* Old readind code
- read = fread(buffer, number_size, read_size, ptr);
-    size_t count = 0;
-    while (read > 0)
-    {
-        if (count+read >= nb_double_file) {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.");
-            return NULL;
-        }
-        for (int i = 0; i < read; i++)
-        {
-            if (number_size == 4)
-            {                                                                // Convert to different pointer then read
-                uint32_t byte_val = ((uint32_t *) buffer)[i]; // Cast then read
-                if (inverse)
-                {
-                    byte_val = __builtin_bswap32(byte_val);
-                }
-                output_arr[count] = (double) (*(float *)(&byte_val)); // Dark magic pointer conversion
-            }
-            else if (number_size == 8)
-            {                                                                // Convert to different pointer then read
-                uint64_t byte_val = ((uint64_t *) buffer)[i]; // Cast then read
-                if (inverse)
-                {
-                    byte_val = __builtin_bswap64(byte_val);
-                }
-                output_arr[count] = *(double *)(&byte_val); // Dark magic pointer conversion
-            }
-
-            count++;
-        }
-        read = fread(buffer, number_size, read_size, ptr);
-    }
-*/

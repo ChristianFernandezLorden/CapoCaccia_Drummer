@@ -2,23 +2,6 @@ using Statistics
 const read_lib = joinpath(@__DIR__, "read_vex_lib.so")
 
 
-# old read way
-"""
-command = `binaryToCSV.exe \$dir/\$system_file \$outputFile`
-run(command)
-
-df_sensors = CSV.read(outputFile, DataFrame)
-
-p_time_sen = df_sensors[!, "1"][:]
-p_angle = df_sensors[!, "2"][:]
-p_speed = df_sensors[!, "3"][:]
-#p_torque = df_sensors[!, "4"][:]
-#p_voltage = df_sensors[!, "5"][:]
-#p_current = df_sensors[!, "6"][:]
-#p_power = df_sensors[!, "7"][:]
-#p_volt_sent = df_sensors[!, "7"][:]
-"""
-
 function movingaverage(X::Vector, numofele::Int)
     BackDelta = div(numofele, 2)
     ForwardDelta = isodd(numofele) ? div(numofele, 2) : div(numofele, 2) - 1
@@ -62,7 +45,7 @@ function creadToArray(file::String)
     size_vec = Ref{Culonglong}(0)
     nb_col = Ref{Culonglong}(0)
 
-    vec_ptr = @ccall read_lib.binaryToVector(file::Cstring, size_vec::Ptr{Culonglong}, nb_col::Ptr{Culonglong})::Ptr{Cdouble}
+    vec_ptr = @ccall read_lib.binaryfileToVector(file::Cstring, size_vec::Ptr{Culonglong}, nb_col::Ptr{Culonglong})::Ptr{Cdouble}
 
     return reshape(unsafe_wrap(Vector{Float64}, vec_ptr, size_vec[], own=true), Int64(nb_col[]), :)
 end
