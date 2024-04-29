@@ -6,6 +6,72 @@ state_name_pat = "{}_s_{}"
 output_name_pat = "{}_i_{}"
 derivative_name_pat = "{}_ds_{}"
 
+def parseDotSeparatedStringPair(input_str: str) -> tuple[str,str]:
+    input_str = input_str.strip()
+    # Parts can be enclosed in quotes 
+    # but only the inside of quotes is considered when parsing
+    
+    first_str = None
+    second_str = None
+    start_ind = 0
+    
+    inQuotes: bool = False
+    quoted: bool = False
+    
+    # Check string and extract first part of operand.
+    i = 0
+    while i < len(input_str):
+        v = input_str[i]
+        
+        if v == '"':
+            inQuotes = not inQuotes
+            if inQuotes:
+                quoted = True
+            
+        if not inQuotes:
+            if v == ".":
+                if first_str is None: 
+                    if quoted:
+                        str_start = start_ind+1
+                        str_end = i-1
+                        quoted = False
+                    else:
+                        str_start = start_ind
+                        str_end = i
+                    
+                    if str_start == str_end:
+                        raise ValueError('Dot separated pair {} has an empty first part.'.format(input_str))
+                    
+                    first_str = input_str[str_start:str_end].strip()
+                    start_ind = i+1
+                else:
+                    raise ValueError('Dot separated pair {} has two dots outside of quotes (").'.format(input_str))
+            
+        i += 1
+        
+    if inQuotes:
+        raise ValueError('Dot separated pair {} has an unmatched quote.'.format(input_str))
+    
+    if first_str is None:
+        raise ValueError("Dot separated pair '{}' does not have a second part.".format(input_str))
+    
+    # Extract second part of string
+    if quoted:
+        str_start = start_ind+1
+        str_end = i-1
+        quoted = False
+    else:
+        str_start = start_ind
+        str_end = i
+    
+    if str_start == str_end:
+        raise ValueError('Dot separated pair {} has an empty second part.'.format(input_str))
+    
+    second_str = input_str[str_start:str_end].strip()
+    
+    return (first_str, second_str)
+
+
 class Registry:
     operands: set[Operand] = None
     functions: set[Function] = None
@@ -33,6 +99,7 @@ class Registry:
     
     def getBlocks(self) -> set[Block]:
         return self.blocks
+    
 
 class Operation(Enum): # Operations take one or two inputs, never more
     ADD = (auto(), "({}+{})", True)
@@ -77,13 +144,13 @@ class Operation(Enum): # Operations take one or two inputs, never more
                     raise ValueError("Operation {} has format string {} which does not use automatic or manual numbering.".format(self.name, self.opString))
                 
         if numbered and implicit:
-            raise ValueError("Operation {} has format string {} which mix automatic and manual numbering which is forbidden.".format(self.name, self.opString))
+            raise ValueError("Operation {} has format string {} which mix automatic and manual numbering.".format(self.name, self.opString))
         
         if self.nb_input <= 0:
-            raise ValueError("Operation '{}' has 0 inputs. It is not an operation.".format(self.name))
+            raise ValueError("Operation '{}' has 0 inputs in its formating string.".format(self.name))
         
         if self.repeatable and self.nb_input != 2:
-            raise ValueError("Operation '{}' is repeatable but does not have exactly 2 inputs. This is not possible".format(self.name))
+            raise ValueError("Operation '{}' is marked repeatable but does not have exactly 2 inputs.".format(self.name))
             
             
     def baseStr(self) -> str:
@@ -120,35 +187,8 @@ class Operand:
     value: float = None
     
     def __init__(self, operand_str: str, block_name: str) -> Operand:
-        operand_str = operand_str.strip()
-        if operand_str[0] != '"':
-            raise ValueError('Operand {} does not start with ".'.format(operand_str))
         
-        id_str = None
-        val_str = None
-        start_ind = 1
-        
-        # Extract Strings from operand
-        i = 1
-        while i < len(operand_str):
-            v = operand_str[i]
-            if v == '"':
-                if id_str is None: 
-                    if len(operand_str) < i+5:
-                        raise ValueError('Operand {} length is too short to contain the second string.')
-                    if operand_str[i+1] != '.' or operand_str[i+2] != '"':
-                        raise ValueError('Operand {} first string is not directly followed by ." .'.format(operand_str))
-                    id_str = operand_str[start_ind:i]
-                    i += 2
-                    start_ind = i+1
-                    
-                else:
-                    val_str = operand_str[start_ind:i]
-                    break
-            i += 1
-            
-        if id_str is None or val_str is None:
-            raise ValueError("String '{}' is not a correct operand string.".format(operand_str))
+        id_str, val_str = parseDotSeparatedStringPair(operand_str)
         
         if id_str.upper() == "EXT":
             self.type = OperandType.INPUT
@@ -164,6 +204,8 @@ class Operand:
             if id_str.upper() == "THIS":
                 self.parent = block_name
             else:
+                if id_str.find(" ") != -1:
+                    raise ValueError("Operand '{}' has a space inside a name which is forbidden.".format(operand_str))
                 self.parent = id_str
             
             if val_str[0].lower() == 's': # State variable
@@ -184,7 +226,7 @@ class Operand:
         if self.type == OperandType.INPUT or self.type == OperandType.NAMED_CONST:
             return self.parent
         if self.type == OperandType.CONST:
-            return "({})".format(self.value)
+            return "({})".format(self.value) # Enclosing parenthesis may be unecessary but there for safety
         if self.type == OperandType.STATE:
             return state_name_pat.format(self.parent, self.index)
         if self.type == OperandType.INTERN:
@@ -250,7 +292,7 @@ class OperationNode:
 
 class FunctionType(Enum):
     OUTPUT = 1 # Creates an output from states and inputs
-    STATE = 2 # Creates a derivqtive of a state from states and inputs
+    STATE = 2 # Creates a derivative of a state from states and inputs
     
 class Function:
     op_tree: OperationNode = None # Top operation node of the fct
@@ -409,47 +451,80 @@ class System:
             self.outputs.add(op.toStr())
         lines = lines[1:]
         
-        base_str = lines[0]
-        if base_str[0] == '"': # Check if there are named constants
-            for out in base_str.split(","):
-                out = out.strip()
-                id_str = None
-                val_str = None 
-                i = 1
-                start_ind = 1
-                while i < len(out):
-                    v = out[i]
+        
+        inQuotes: bool = False
+        hasNamedConstants: bool = True
+        while hasNamedConstants:
+            base_str = lines[0]
+            hasNamedConstants = False
+            for i in range(0,len(base_str)):
+                v = base_str[i]
+                if v == '"':
+                    inQuotes = not inQuotes
+                
+                if not inQuotes:
+                    if v == ".":
+                        hasNamedConstants = True 
+                        break
+                        
+            if hasNamedConstants: # Defines the name constants
+                inQuotes = False
+                start_ind = 0
+                base_str = base_str + ","
+                for i in range(len(base_str)):
+                    v = base_str[i]
                     if v == '"':
-                        if id_str is None: 
-                            if out[i+1] != '.' or out[i+2] != '"':
-                                break
-                            id_str = out[start_ind:i]
-                            i += 2
-                            start_ind = i+1
-                            
-                        else:
-                            val_str = out[start_ind:i]
-                            break
-                    i += 1
-                if val_str is None or id_str is None:
-                    raise ValueError("Named constant '{}' incorrect.".format(out))
-                self.named_constants[id_str] = float(val_str)
-                valid_names.add(id_str)
-            lines = lines[1:]
+                        inQuotes = not inQuotes
+                    
+                    if not inQuotes and v == ",":
+                        id_str, val_str = parseDotSeparatedStringPair(base_str[start_ind:i])
+                        
+                        if val_str is None or id_str is None:
+                            raise ValueError("Named constant '{}' incorrect.".format(out))
+                        
+                        if id_str.find(' ') != -1:
+                            raise ValueError("Named constant '{}' has a space inside its name which is forbidden.".format(name))
+                        
+                        self.named_constants[id_str] = float(val_str)
+                        valid_names.add(id_str)
+                        
+                        start_ind = i+1
+                lines = lines[1:]
         
         out_ind = 0
         state_ind = 0
         block_names: set[str] = set()
         while len(lines) > 0: # Parse all blocks
+            quoted: bool = False
+            inQuotes = False
             base_str = lines[0]
-            id =  base_str.find(',')
+            id = -1
+            # Allow quoted names for blocks (dont check for inline quote)
+            for i in range(len(base_str)):
+                v = base_str[i]
+                if v == '"':
+                    inQuotes = not inQuotes
+                    quoted = True
+                
+                if not inQuotes:
+                    if v == ",":
+                        id = i 
+                        break
+            
             if id == -1:
                 raise ValueError("Line '{}' is not a valid block starting line.".format(base_str))
+            
             name = base_str[:id].strip()
+            if quoted:
+                name = name[1:-1]
             if name in block_names:
                 raise ValueError("Name '{}' is used by two blocks.".format(name))
+            if name.find(' ') != -1:
+                raise ValueError("Name '{}' has a space inside which is forbidden.".format(name))
+                
             block_names.add(name)
             
+            # dont alloz quoted integer
             new_base_str = base_str[id+1:]
             id = new_base_str.find(',')
             if id == -1:
@@ -508,7 +583,7 @@ class System:
                     break
                     
             if not hasWritten:
-                raise ValueError("Computation graph is cyclic. It cannot be resolved.")
+                raise ValueError("Computation graph of functions is cyclic. It cannot be resolved.")
             
     
     def write(self, filename: str) -> None:
