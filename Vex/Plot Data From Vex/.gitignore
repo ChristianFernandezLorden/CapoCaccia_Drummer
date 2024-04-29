@@ -1,0 +1,3 @@
+# Dont save data and their visualization (use cloud based service for that)
+data/
+figures/

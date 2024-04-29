@@ -1,7 +1,7 @@
 #include <string.h>
 
 #include "fast_tanh.h"
-#include "hco.h"
+#include "full_torque.h"
 #include "vex.h"
 
 static double voltage = 0;
@@ -28,7 +28,7 @@ using namespace vex;
  * output : double vector of length 1
  */
 
-void dyn_system_hco(double *input, double *state, double *dstate, double *output)
+void dyn_system_full_torque(double *input, double *state, double *dstate, double *output)
 {
 	// Named Constants
 	double gfm = -2.0;
@@ -106,14 +106,14 @@ void dyn_system_hco(double *input, double *state, double *dstate, double *output
 }
 
 
-void hco_init() {
+void full_torque_init() {
 	for (int i = 0; i < SMOOTHING_PERIOD; i++)
 	{
 		smoothing_filter[i] = 0;
 	}
 }
 
-void hco_create_header_file()
+void full_torque_create_header_file()
 {
 	char text[10000];
 
@@ -131,7 +131,7 @@ void hco_create_header_file()
 						  nb_char * sizeof(char));
 }
 
-double hco_system_update()
+double full_torque_system_update()
 {
 	angle = (SpeedSensor.position(deg) * M_PI / 180.0);
 	double tmp_speed = SpeedSensor.velocity(rpm) * M_PI / 30.0;
@@ -161,10 +161,10 @@ double hco_system_update()
 	feed2_com = tmp_feed2_com;
 	lock.unlock();
 
-	return tmp_voltage;
+	return 24000;
 }
 
-void hco_system_record(int count)
+void full_torque_system_record(int count)
 {
 	double torque = PendulumMotor.torque(Nm);
 	double voltage_mot = PendulumMotor.voltage(volt);
@@ -186,7 +186,7 @@ void hco_system_record(int count)
 	lock.unlock();
 }
 
-void hco_setup(int *nb_state, int *nb_input, int *nb_output,
+void full_torque_setup(int *nb_state, int *nb_input, int *nb_output,
 					  double **input, double **state, double **state2, double **dstate, double **dstate2, double **output) 
 {
 	*nb_state = 12;
@@ -216,25 +216,25 @@ void hco_setup(int *nb_state, int *nb_input, int *nb_output,
 	(*input)[0] = 0; // Iapp
 	(*input)[1] = 0; // Iapp
 
-	(*input)[2] = -1.1; // Iapp
+	(*input)[2] = -2; // Iapp
 
 	(*input)[3] = 6000.0; // gsyn
 	(*input)[4] = 0.0;	  // dsyn
 }
 
-void hco_sim_com(double *input, double *output) 
+void full_torque_sim_com(double *input, double *output) 
 {
 	lock.lock();
 
-	input[0] = 0;
-	input[1] = 0;
+	input[0] = feed2_com;
+	input[1] = feed1_com;
 
 	voltage = output[0];
 
 	lock.unlock();
 }
 
-void hco_sim_record(double *input, double *state, double *dstate, double *output, int count)
+void full_torque_sim_record(double *input, double *state, double *dstate, double *output, int count)
 {
 	int offset = NB_CHANNEL_SYSTEM * count;
 

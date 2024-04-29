@@ -18,7 +18,7 @@
 // ---- END VEXCODE CONFIGURED DEVICES ----
 
 // This include directive controls which test is done
-#include "hco_process.h"
+#include "hco.h"
 
 
 #include "vex.h"
@@ -163,12 +163,6 @@ int main()
       Brain.Screen.clearLine(1);
       Brain.Screen.setCursor(1, 1);
       Brain.Screen.print("Saved !!!");
-      Brain.Screen.setCursor(2, 1);
-      Brain.Screen.print("gsm = %lf", GSM);
-      Brain.Screen.setCursor(3, 1);
-      Brain.Screen.print("gup = %lf", GUP);
-      Brain.Screen.setCursor(4, 1);
-      Brain.Screen.print("Iapp = %lf", IAPP);
       return 0;
     }
 #endif

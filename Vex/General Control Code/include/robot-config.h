@@ -7,6 +7,7 @@ extern brain Brain;
 // VEXcode devices
 extern motor PendulumMotor;
 extern rotation SpeedSensor;
+extern inertial CollisionSensor;
 
 // Other shared variables 
 extern semaphore lock;

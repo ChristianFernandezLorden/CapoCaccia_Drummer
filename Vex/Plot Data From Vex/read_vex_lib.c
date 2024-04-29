@@ -145,9 +145,10 @@ int readFloat(void *buffer, double *output_arr, FILE *ptr, size_t read_size, siz
     size_t count = 0;
     while (read > 0)
     {
-        if (count + read >= file_size)
+        if (count + read > file_size)
         {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.\n");
+            fprintf(stderr, "Underestimated size of file (file_size = %ld, read = %ld, total = %ld). Error from SEEK_END.\n", 
+                            file_size, read, count+read);
             return 0;
         }
         for (size_t i = 0; i < read; i++)
@@ -166,9 +167,10 @@ int readFloatInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size, 
     size_t count = 0;
     while (read > 0)
     {
-        if (count + read >= file_size)
+        if (count + read > file_size)
         {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.\n");
+            fprintf(stderr, "Underestimated size of file (file_size = %ld, read = %ld, total = %ld). Error from SEEK_END.\n",
+                    file_size, read, count + read);
             return 0;
         }
         for (size_t i = 0; i < read; i++)
@@ -190,9 +192,10 @@ int readDouble(void *buffer, double *output_arr, FILE *ptr, size_t read_size, si
     size_t count = 0;
     while (read > 0)
     {
-        if (count + read >= file_size)
+        if (count + read > file_size)
         {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.\n");
+            fprintf(stderr, "Underestimated size of file (file_size = %ld, read = %ld, total = %ld). Error from SEEK_END.\n",
+                    file_size, read, count + read);
             return 0;
         }
         for (size_t i = 0; i < read; i++)
@@ -211,9 +214,10 @@ int readDoubleInv(void *buffer, double *output_arr, FILE *ptr, size_t read_size,
     size_t count = 0;
     while (read > 0)
     {
-        if (count + read >= file_size)
+        if (count + read > file_size)
         {
-            fprintf(stderr, "Underestimated size of file. Error from SEEK_END.\n");
+            fprintf(stderr, "Underestimated size of file (file_size = %ld, read = %ld, total = %ld). Error from SEEK_END.\n",
+                    file_size, read, count + read);
             return 0;
         }
         for (size_t i = 0; i < read; i++)

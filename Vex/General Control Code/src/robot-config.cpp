@@ -9,6 +9,7 @@ brain Brain;
 // VEXcode device constructors
 motor PendulumMotor = motor(PORT1, ratio18_1, false);
 rotation SpeedSensor = rotation(PORT2, true);
+inertial CollisionSensor = inertial(PORT3);
 
 // Other shared variables
 semaphore lock = semaphore();
