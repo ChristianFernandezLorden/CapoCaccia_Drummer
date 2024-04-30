@@ -4,7 +4,22 @@
 
 ### Structure of File
 
-Example of a file following the structure :
+Most of the values are encoded in dot separated pairs (value1.value2) where quotes can be used to avoid problems with other art of the code.
+
+The first line (limitation of the proccessing flow) must reprensent the outputs of the system, multiple outputs are separated by coma. The convention for referencing output follows th convention of referencing computation and state taht is described below. 
+
+The following lines before the first block represent the named constants, multiples constants are separated by coma or line break. A named constant is represented by \<name>.\<value>.
+
+A block starts by a defining line which is structured in the following way. First the named of the block is given then a coma followed by the number of internal computation (function) then a coma followed by the number of states.
+
+Assuming *n* internal computations and *k* states, the *n* first lines after the block definitions represent the functions of the internal computations and *k* lines after represent the functions computing the derivatives of the states. 
+
+A function has access to operations such as "ADD" which add two or more numbers and "TANHF" which computes an approximation of he hyperbolic tangent of a number, operations are case insensitive. The leaf of these operations are dot separated values which represent :
+1. Reference to this block or another block computation or state, denoted THIS.\<val> for internal reference and \<name>.\<val> for reference to another block. \<name>.i\<num> for reference to a computation and \<name>.s\<num> for reference to a state.
+2. Reference to an external input EXT.\<name> by name.
+3. Reference to a constant by value with CONST.\<val> or by name (for named constant) with CONST.\<name>.
+
+Example of the start of a file following the structure :
 ~~~Text
 adder.i3
 
