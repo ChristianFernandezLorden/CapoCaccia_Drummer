@@ -124,7 +124,7 @@ Then the following code can be used to translate a binary file to a matrix in Ju
 size_vec = Ref{Culonglong}(0)
 nb_col = Ref{Culonglong}(0)
 
-vec_ptr = @ccall read_lib.binaryfileToVector(\<bin_file>::Cstring, size_vec::Ptr{Culonglong}, nb_col::Ptr{Culonglong})::Ptr{Cdouble}
+vec_ptr = @ccall read_lib.binaryfileToVector(<bin_file>::Cstring, size_vec::Ptr{Culonglong}, nb_col::Ptr{Culonglong})::Ptr{Cdouble}
 
 data = reshape(unsafe_wrap(Vector{Float64}, vec_ptr, size_vec[], own=true), Int64(nb_col[]), :)
 ~~~
