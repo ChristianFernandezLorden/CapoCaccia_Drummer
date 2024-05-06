@@ -112,7 +112,9 @@ class Operation(Enum): # Operations take one or two inputs, never more
     TANH5 = (auto(), "five_lin_tanh({})", False)
     TANH15 = (auto(), "fifteen_lin_tanh({})", False)
     MAX = (auto(), "fmax({},{})", True)
+    MAXT = (auto(), "(({0}) > ({1}) ? ({0}) : ({1}))", True)
     MIN = (auto(), "fmin({},{})", True)
+    MINT = (auto(), "(({0}) < ({1}) ? ({0}) : ({1}))", True)
     INV = (auto(), "-({})", False)
     POW = (auto(), "pow({},{})", False)
     SIN = (auto(), "sin({})", False)
@@ -481,16 +483,22 @@ class System:
                         id_str, val_str = parseDotSeparatedStringPair(base_str[start_ind:i])
                         
                         if val_str is None or id_str is None:
-                            raise ValueError("Named constant '{}' incorrect.".format(out))
+                            raise ValueError("Named constant '{}' incorrect.".format(base_str[start_ind:i]))
                         
                         if id_str.find(' ') != -1:
-                            raise ValueError("Named constant '{}' has a space inside its name which is forbidden.".format(name))
+                            raise ValueError("Named constant '{}' has a space inside its name which is forbidden.".format(base_str[start_ind:i]))
                         
-                        self.named_constants[id_str] = float(val_str)
+                        try:
+                            self.named_constants[id_str] = float(val_str)
+                        except:
+                            raise ValueError("Named constant '{}' has a non numerical value.".format(base_str[start_ind:i]))
                         valid_names.add(id_str)
                         
                         start_ind = i+1
                 lines = lines[1:]
+                
+                if inQuotes:
+                    raise ValueError("Named constant line '{}' has an unmatched quote.".format(base_str))
         
         out_ind = 0
         state_ind = 0

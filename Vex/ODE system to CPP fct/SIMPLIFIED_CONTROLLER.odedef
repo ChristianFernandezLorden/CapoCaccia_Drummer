@@ -1,0 +1,388 @@
+// ============================
+//	   Output
+// ============================
+
+output.i1
+
+// ============================
+//	   Parametres
+// ============================
+
+// Preprocessing params
+tau_pos_inv."200", input_gain."10"
+
+// Common neuronal param
+dfm."0.0" , dsp."0.5" , dsm."-0.5" , dup."-0.5" , V0."-1.2" 
+tau_V_inv."2500" , tau_vf_inv."2500" , tau_vs_inv."62.5" , tau_vu_inv."1.25"
+
+// HCO param
+//base
+gfm."-2" , gsp."6" , gsm."-4" , gup."5" , iapp."-1.5"
+gsyn."-1" , dsyn."0" , tau_vsyn_inv."25"
+//modulation
+tau_mod_inv."0.01"
+gsyn_gsm_mod."1", dsyn_gsm_mod."0.5"
+gsyn_iapp_mod."1", dsyn_iapp_mod."0.5"
+
+// Differentiator params
+gfm_diff."-2", gsp_diff."4", gsm_diff."-1", gup_diff."1", iapp_diff."0.2"
+gsyn_diff."100" , dsyn_diff."-0.2" , tau_vsyn_diff_inv."0.25" 
+
+// Sensory events 
+gfm_sense."-2", gsp_sense."4", gsm_sense."-1", gup_sense."1", iapp_sense."0.3"
+tau_vsyn_sense_inv."25" , gsyn_sense."2" , dsyn_sense_mul."0.0" , dsyn_sense."0.5"
+
+
+// Rebound Block
+iapp_rebound."0"
+gfm_rebound."-2" , gsp_rebound."6" , gsm_rebound."-4" , gup_rebound."5" 
+gfm_rebound_inhib."-2" , gsp_rebound_inhib."6" , gsm_rebound_inhib."-4" , gup_rebound_inhib."5" 
+gsyn_rebound_in."100" , dsyn_rebound_in."-0.2" , tau_vsyn_rebound_in_inv."0.25" 
+gsyn_rebound_inhib."100" , dsyn_rebound_inhib."-0.2" , tau_vsyn_rebound_inhib_inv."0.25" 
+
+// Modulation General Param
+gfm_mod."-2", gsp_mod."4", gsm_mod."-1", gup_mod."1", iapp_mod."0.2"
+
+// Compare Max event to desired angle 
+gsyn_amp_event."3", dsyn_amp_event."0.5", dsyn_amp_offset."0.1"
+
+// Bistable system
+gfm_bistable."0.0" , gsp_bistable."0.0" , gsm_bistable."0.0" , gup_bistable."0.0"
+iapp_bistable_exc."0.0" , iapp_bistable_inhib."0.0"
+tau_vsyn_bistable_inv."25"
+gsyn_bistable_in."0.0" , dsyn_bistable_in."0.0"
+gsyn_bistable_inhib."-7.0" , dsyn_bistable_inhib."0.0"
+gsyn_bistable_exc."2.0" , dsyn_bistable_exc."0.0"
+gsyn_bistable_out."3.0" , dsyn_bistable_out."0.0"
+
+// Coincidence Detection
+
+
+
+// ============================
+//	   BLOCKS
+// ============================
+
+
+// Use a block to define all output state (here just différence of the cliped output of both motor neuron)
+output, 1, 0
+SUB(MIN(MAX(neuron_pos.s1, CONST.0), CONST.1), MIN(MAX(neuron_neg.s1, CONST.0), CONST.1))
+
+
+
+// Generating and processing input angle
+preprocessing, 2, 1
+MUL(CONST.input_gain, SIN(THIS.s1))
+MUL(CONST.input_gain, COS(THIS.s1))
+MUL( CONST.tau_pos_inv , SUB( EXT.pos , THIS.s1 ))
+
+
+// Spiky Diff Block for sin (neuron_diff_sin_pos spike when the input signal has a positive derivative and neuron_diff_sin_neg when it has a negative derivative)
+adder_sin_diff, 3,0
+SUB(preprocessing.i1, synapse_int_sin.s1) 
+ADD(CONST.iapp_diff, THIS.i1) 
+SUB(CONST.iapp_diff, THIS.i1)
+
+
+neuron_diff_sin_pos, 4, 4
+MUL( CONST.gfm_diff , SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_diff , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_diff , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_diff , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_sin_diff.i2) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_diff_sin_neg, 4, 4
+MUL( CONST.gfm_diff , SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_diff , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_diff , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_diff , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_sin_diff.i3) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+
+synapse_int_sin, 2, 1
+MUL( CONST.gsyn_diff ,  MUL( ADD( TANHF(MUL(SUB(neuron_diff_sin_pos.s1,CONST.dsyn_diff),CONST."2")) , CONST."1") , CONST."0.5") ) 
+MUL( CONST.gsyn_diff ,  MUL( ADD( TANHF(MUL(SUB(neuron_diff_sin_neg.s1,CONST.dsyn_diff),CONST."2")) , CONST."1") , CONST."0.5") ) 
+SUB ( SUB(THIS.i1,THIS.i2) , MUL( CONST.tau_vsyn_diff_inv , THIS.s1) )
+
+
+// Sensory event 
+adder_sense, 1,0
+ADD(SUB(CONST.input_gain, preprocessing.i2), CONST.iapp_sense )
+
+neuron_sense_bottom, 4, 4
+MUL( CONST.gfm_sense , SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_sense , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_sense , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_sense , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_sense.i1) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+synapse_sense_out, 2, 2
+MUL( CONST.gsyn_sense,  MUL( ADD( TANHF(MUL(SUB(THIS.s1,CONST.dsyn_sense_mul),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.gsyn_sense,  MUL( ADD( TANHF(MUL(SUB(THIS.s2,CONST.dsyn_sense_mul),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.tau_vsyn_sense_inv , SUB(neuron_diff_sin_pos.s1,THIS.s1) )
+MUL( CONST.tau_vsyn_sense_inv , SUB(neuron_diff_sin_neg.s1,THIS.s2) )
+
+sense_out, 3, 0
+MUL( ADD( TANHF(MUL(SUB(neuron_sense_bottom.s1,CONST.dsyn_sense),CONST.2)) , CONST.1) , CONST."0.5")
+MUL( synapse_sense_out.i1, sense_out.i1) 
+MUL( synapse_sense_out.i2, sense_out.i1) 
+
+
+// Spiky Diff Block for cos (neuron_diff_cos_pos spike when the input signal has a positive derivative and neuron_diff_cos_neg when it has a negative derivative)
+adder_cos_diff, 3,0
+SUB(preprocessing.i2, synapse_int_cos.s1) 
+ADD(CONST.iapp_diff, THIS.i1) 
+SUB(CONST.iapp_diff, THIS.i1)
+
+
+neuron_diff_cos_pos, 4, 4
+MUL( CONST.gfm_diff , SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_diff , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_diff , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_diff , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_cos_diff.i2) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_diff_cos_neg, 4, 4
+MUL( CONST.gfm_diff , SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_diff , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_diff , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_diff , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_cos_diff.i3) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+
+synapse_int_cos, 2, 1
+MUL( CONST.gsyn_diff ,  MUL( ADD( TANHF(MUL(SUB(neuron_diff_cos_pos.s1,CONST.dsyn_diff),CONST."2")) , CONST."1") , CONST."0.5") ) 
+MUL( CONST.gsyn_diff ,  MUL( ADD( TANHF(MUL(SUB(neuron_diff_cos_neg.s1,CONST.dsyn_diff),CONST."2")) , CONST."1") , CONST."0.5") ) 
+SUB ( SUB(THIS.i1,THIS.i2) , MUL( CONST.tau_vsyn_diff_inv , THIS.s1) )
+
+
+// Rebound Block event (neuron_rebound spikes a few times after neuron_diff_cos_neg stops spiking)
+adder_rebound, 2,0
+ADD(CONST.iapp_rebound, synapse_rebound_in.i1)
+ADD(adder_rebound.i1 , synapse_rebound_inhib.i1 )
+
+neuron_rebound, 4, 4
+MUL( CONST.gfm_rebound , SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_rebound , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_rebound , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_rebound , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_rebound.i2) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_rebound_inhib, 4, 4
+MUL( CONST.gfm_rebound_inhib, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_rebound_inhib , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_rebound_inhib , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_rebound_inhib , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_rebound.i1) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+synapse_rebound_in, 1, 1
+MUL( CONST.gsyn_rebound_in ,  MUL( ADD( TANHF(MUL(SUB(THIS.s1,CONST.dsyn_rebound_in),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.tau_vsyn_rebound_in_inv , SUB(neuron_diff_cos_neg.s1,THIS.s1) )
+
+synapse_rebound_inhib, 1, 1
+MUL( CONST.gsyn_rebound_inhib ,  MUL( ADD( TANHF(MUL(SUB(THIS.s1,CONST.dsyn_rebound_inhib),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.tau_vsyn_rebound_inhib_inv , SUB(neuron_rebound_inhib.s1,THIS.s1) )
+
+
+
+// Compare Max event to desired angle 
+gated_amplitudes_events, 4, 0
+MUL(CONST.input_gain, EXT.desired_cos_angle)
+MUL( CONST.gsyn_amp_event ,  MUL( ADD( TANHF(MUL(SUB(neuron_rebound.s1,CONST.dsyn_amp_event),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( THIS.i2 ,  MUL( ADD( TANHF(MUL(SUB(SUB(preprocessing.i2, THIS.i1),CONST.dsyn_amp_offset),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( THIS.i2 ,  MUL( ADD( TANHF(MUL(SUB(SUB(THIS.i1, preprocessing.i2),CONST.dsyn_amp_offset),CONST.2)) , CONST.1) , CONST."0.5") ) 
+
+adder_amp_mod, 2, 0
+ADD(CONST.iapp_mod, gated_amplitudes_events.i3)
+ADD(CONST.iapp_mod, gated_amplitudes_events.i4)
+
+neuron_amp_up_mod, 4, 4
+MUL( CONST.gfm_mod, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_mod , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_mod , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_mod , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_amp_mod.i1) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_amp_down_mod, 4, 4
+MUL( CONST.gfm_mod, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_mod , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_mod , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_mod , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_amp_mod.i2) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+
+
+// Bistable HCO state estimator 
+
+adder_bistable, 6, 0
+ADD(ADD(CONST.iapp_bistable_exc, THIS.i5), synapse_bistable_inhib.i2)
+ADD(ADD(CONST.iapp_bistable_exc, THIS.i6), synapse_bistable_inhib.i1)
+ADD(CONST.iapp_bistable_inhib, synapse_bistable_exc.i1)
+ADD(CONST.iapp_bistable_inhib, synapse_bistable_exc.i2)
+MUL( CONST.gsyn_bistable_in,  MUL( ADD( TANHF(MUL(SUB(neuron_pos.s1,CONST.dsyn_bistable_in),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.gsyn_bistable_in,  MUL( ADD( TANHF(MUL(SUB(neuron_neg.s1,CONST.dsyn_bistable_in),CONST.2)) , CONST.1) , CONST."0.5") ) 
+
+neuron_bistable_exc_pos, 4, 4
+MUL( CONST.gfm_bistable, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_bistable , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_bistable , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_bistable , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_bistable.i1) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_bistable_exc_neg, 4, 4
+MUL( CONST.gfm_bistable, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_bistable , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_bistable , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_bistable , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_bistable.i2) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_bistable_inhib_pos, 4, 4
+MUL( CONST.gfm_bistable, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_bistable , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_bistable , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_bistable , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_bistable.i3) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_bistable_inhib_neg, 4, 4
+MUL( CONST.gfm_bistable, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_bistable , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_bistable , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_bistable , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_bistable.i4) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+synapse_bistable_inhib, 2, 2
+MUL( CONST.gsyn_bistable_inhib,  MUL( ADD( TANHF(MUL(SUB(THIS.s1,CONST.dsyn_bistable_inhib),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.gsyn_bistable_inhib,  MUL( ADD( TANHF(MUL(SUB(THIS.s2,CONST.dsyn_bistable_inhib),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.tau_vsyn_bistable_inv , SUB(neuron_bistable_inhib_pos.s1,THIS.s1) )
+MUL( CONST.tau_vsyn_bistable_inv , SUB(neuron_bistable_inhib_neg.s1,THIS.s2) )
+
+synapse_bistable_exc, 2, 2
+MUL( CONST.gsyn_bistable_exc,  MUL( ADD( TANHF(MUL(SUB(THIS.s1,CONST.dsyn_bistable_exc),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.gsyn_bistable_exc,  MUL( ADD( TANHF(MUL(SUB(THIS.s2,CONST.dsyn_bistable_exc),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.tau_vsyn_bistable_inv , SUB(neuron_bistable_exc_pos.s1,THIS.s1) )
+MUL( CONST.tau_vsyn_bistable_inv , SUB(neuron_bistable_exc_neg.s1,THIS.s2) )
+
+synapse_bistable_out, 2, 2
+MUL( CONST.gsyn_bistable_out,  MUL( ADD( TANHF(MUL(SUB(THIS.s1,CONST.dsyn_bistable_out),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.gsyn_bistable_out,  MUL( ADD( TANHF(MUL(SUB(THIS.s2,CONST.dsyn_bistable_out),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.tau_vsyn_bistable_inv , SUB(neuron_bistable_inhib_pos.s1,THIS.s1) )
+MUL( CONST.tau_vsyn_bistable_inv , SUB(neuron_bistable_inhib_neg.s1,THIS.s2) )
+
+// Coincidence Detection (frequency modulation)
+
+synapse_coincidence_slow, 2, 0
+MUL( synapse_bistable_out.i2, sense_out.i2)
+MUL( synapse_bistable_out.i1, sense_out.i3) 
+
+synapse_coincidence_fast, 2, 0
+MUL( synapse_bistable_out.i1, sense_out.i2) 
+MUL( synapse_bistable_out.i2, sense_out.i3) 
+
+adder_coincidence, 2, 0
+ADD(CONST.iapp_mod, ADD(synapse_coincidence_slow.i1, synapse_coincidence_slow.i2))
+ADD(CONST.iapp_mod, ADD(synapse_coincidence_fast.i1, synapse_coincidence_fast.i2))
+
+neuron_freq_up_mod, 4, 4
+MUL( CONST.gfm_mod, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_mod , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_mod , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_mod , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_coincidence.i1) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_freq_down_mod, 4, 4
+MUL( CONST.gfm_mod, SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0,CONST.dfm)) ) )
+MUL( CONST.gsp_mod , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0,CONST.dsp)) ) )
+MUL( CONST.gsm_mod , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0,CONST.dsm)) ) )
+MUL( CONST.gup_mod , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0,CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder_coincidence.i2) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+
+
+// HCO Block
+gsm_modulation, 2, 1
+MUL( CONST.gsyn_gsm_mod ,  MUL( ADD( TANHF(MUL(SUB(neuron_amp_up_mod.s1,CONST.dsyn_gsm_mod),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.gsyn_gsm_mod ,  MUL( ADD( TANHF(MUL(SUB(neuron_amp_down_mod.s1,CONST.dsyn_gsm_mod),CONST.2)) , CONST.1) , CONST."0.5") ) 
+ADD( MUL(CONST.tau_mod_inv, SUB(CONST.gsm, THIS.i1)) , SUB(THIS.i2, THIS.i1) )
+
+iapp_modulation, 2, 1
+MUL( CONST.gsyn_iapp_mod ,  MUL( ADD( TANHF(MUL(SUB(neuron_freq_up_mod.s1,CONST.dsyn_iapp_mod),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.gsyn_iapp_mod ,  MUL( ADD( TANHF(MUL(SUB(neuron_freq_down_mod.s1,CONST.dsyn_iapp_mod),CONST.2)) , CONST.1) , CONST."0.5") ) 
+ADD( MUL(CONST.tau_mod_inv, SUB(CONST.iapp, THIS.i1)) , SUB(THIS.i1, THIS.i2) )
+
+adder, 2, 0
+ADD(iapp_modulation.s1 , ADD(synapse_pos_to_neg.i1, sense_out.i2))
+ADD(iapp_modulation.s1 , ADD(synapse_neg_to_pos.i1, sense_out.i3))
+
+
+neuron_pos, 4, 4
+MUL( CONST.gfm , SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0, CONST.dfm)) ) )
+MUL( CONST.gsp , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0, CONST.dsp)) ) )
+MUL( gsm_modulation.s1 , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0, CONST.dsm)) ) )
+MUL( CONST.gup , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0, CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder.i2) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+neuron_neg, 4, 4
+MUL( CONST.gfm , SUB( TANHF(SUB(THIS.s2,CONST.dfm)) , TANHF(SUB(CONST.V0, CONST.dfm)) ) )
+MUL( CONST.gsp , SUB( TANHF(SUB(THIS.s3,CONST.dsp)) , TANHF(SUB(CONST.V0, CONST.dsp)) ) )
+MUL( gsm_modulation.s1 , SUB( TANHF(SUB(THIS.s3,CONST.dsm)) , TANHF(SUB(CONST.V0, CONST.dsm)) ) )
+MUL( CONST.gup , SUB( TANHF(SUB(THIS.s4,CONST.dup)) , TANHF(SUB(CONST.V0, CONST.dup)) ) )
+MUL( CONST.tau_V_inv , SUB(SUB(SUB(SUB(SUB( ADD(CONST.V0,adder.i1) , THIS.i1 ), THIS.i2 ), THIS.i3 ), THIS.i4 ), THIS.s1 ))
+MUL( CONST.tau_vf_inv , SUB(THIS.s1,THIS.s2) )
+MUL( CONST.tau_vs_inv , SUB(THIS.s1,THIS.s3) )
+MUL( CONST.tau_vu_inv , SUB(THIS.s1,THIS.s4) )
+
+synapse_pos_to_neg, 1, 1
+MUL( CONST.gsyn ,  MUL( ADD( TANHF(MUL(SUB(THIS.s1,CONST.dsyn),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.tau_vsyn_inv , SUB(neuron_pos.s1,THIS.s1) )
+
+synapse_neg_to_pos, 1, 1
+MUL( CONST.gsyn ,  MUL( ADD( TANHF(MUL(SUB(THIS.s1,CONST.dsyn),CONST.2)) , CONST.1) , CONST."0.5") ) 
+MUL( CONST.tau_vsyn_inv , SUB(neuron_neg.s1,THIS.s1) )
