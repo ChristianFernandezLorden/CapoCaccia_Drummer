@@ -137,7 +137,7 @@ int main()
   int loop_count = 0;
   while (true)
   {
-    start = Brain.Timer.systemHighResolution();
+    //start = Brain.Timer.systemHighResolution();
     end = start + step;
 
     double motor_voltage = system_update();
