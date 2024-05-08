@@ -61,6 +61,8 @@ void set_blocking(int fd, int should_block)
         fprintf(stderr, "error %d setting term attributes", errno);
 }
 
+#define BUFFER_SIZE 128
+
 int main()
 {
     char *portname = "/dev/tty.usbmodem11303";
@@ -71,13 +73,29 @@ int main()
         return -1;
     }
 
+    // Dont know how useful this is
     set_interface_attribs(fd, B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
-    set_blocking(fd, 0);                   // set no blocking
+    set_blocking(fd, 1);                   // set no blocking
 
-    write(fd, "hello!\n", 7); // send 7 character greeting
+    char buffer[BUFFER_SIZE];
 
-    usleep((7 + 25) * 100); // sleep enough to transmit the 7 plus
+    
+
+    //printf("%s", buffer);
+
+    buffer[0] = (char) sizeof(double);
+    buffer[1] = '\n';
+
+    write(fd, buffer, 2); // send 7 character greeting
+
+    usleep((7 + 25) * 1000); // sleep enough to transmit the 7 plus
                             // receive 25:  approx 100 uS per char transmit
+    buffer[1] = '\0';
+    int n = read(fd, buffer, sizeof(buffer));
+
+
+    printf("%s", buffer);
+    usleep((7 + 25) * 1000);
 }
 
 /*
