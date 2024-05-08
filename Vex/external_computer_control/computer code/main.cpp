@@ -61,11 +61,12 @@ void set_blocking(int fd, int should_block)
         fprintf(stderr, "error %d setting term attributes", errno);
 }
 
-#define BUFFER_SIZE 128
+#define BUFFER_SIZE 1024
 
 int main()
 {
-    char *portname = "/dev/tty.usbmodem11303";
+    
+    const char *portname = "/dev/tty.usbmodem11303";
     int fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0)
     {
@@ -76,26 +77,127 @@ int main()
     // Dont know how useful this is
     set_interface_attribs(fd, B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
     set_blocking(fd, 1);                   // set no blocking
-
-    char buffer[BUFFER_SIZE];
-
     
+    //FILE *fd = fopen("/dev/tty.usbmodem11303", "r+");
 
-    //printf("%s", buffer);
+    char in_buffer[BUFFER_SIZE];
+    char out_buffer[BUFFER_SIZE];
 
-    buffer[0] = (char) sizeof(double);
-    buffer[1] = '\n';
+    char endianness;
+    int is_float;
+    size_t char_read;
+    size_t char_written;
 
-    write(fd, buffer, 2); // send 7 character greeting
+    {
+        unsigned int i = 1;
+        char *c = (char *)&i;
+        if (*c) // Little endian
+        {
+            endianness = 0;
+        }
+        else // Big endian
+        {
+            endianness = 1;
+        }
+    }
 
-    usleep((7 + 25) * 1000); // sleep enough to transmit the 7 plus
+    out_buffer[0] = 0x01;
+    out_buffer[1] = 0x20;
+    out_buffer[2] = 0x03;
+    out_buffer[3] = 0x40;
+    out_buffer[4] = sizeof(double);
+    out_buffer[5] = endianness;
+
+    char_written = write(fd, out_buffer, 6);
+    //char_written = fwrite(out_buffer, sizeof(char), 6, fd);
+
+    if (char_written != 6)
+    {
+        fprintf(stderr, "error writing handshake\n");
+        return -1;
+    }
+
+    //usleep((6 + 25) * 100); // sleep enough to transmit the 7 plus
                             // receive 25:  approx 100 uS per char transmit
-    buffer[1] = '\0';
-    int n = read(fd, buffer, sizeof(buffer));
 
+    char_read = read(fd, in_buffer, 5);
+    //char_read = fread(in_buffer, sizeof(char), 5, fd);
 
-    printf("%s", buffer);
-    usleep((7 + 25) * 1000);
+    if (char_read < 5)
+    {
+        fprintf(stderr, "error in reading\n");
+    }
+
+    if (in_buffer[4] != endianness)
+    {
+        fprintf(stderr, "Oposite endianness (not supported yet).\n");
+        return -1;
+    }
+
+    //usleep((20 + 25) * 100);
+    // 13 = 1101
+    // 10 = 1010
+
+    int i = 0;
+    char i_char = 0;
+    while (i < 20000)
+    {
+        i++;
+        i_char = ++i_char%200;
+        out_buffer[0] = i_char;
+        out_buffer[1] = 0x02;
+        out_buffer[2] = 0x03;
+        out_buffer[3] = 0x04;
+        out_buffer[4] = 0x05;
+        out_buffer[5] = 0x06;
+        out_buffer[6] = 0x07;
+        out_buffer[7] = 0x08;
+
+        char_written = write(fd, out_buffer, 8);
+        //char_written = fwrite(out_buffer, sizeof(char), 8, fd);
+
+        if (char_written < 8)
+        {
+            fprintf(stderr, "error in writing\n");
+        }
+
+        while (char_written < 8)
+        {
+            char_written += write(fd, &(out_buffer[char_written]), 8 - char_written);
+            //char_written += fwrite(&(out_buffer[char_written]), sizeof(char), 8 - char_written, fd);
+        }
+        
+
+        //usleep(2000);
+
+        char_read = read(fd, in_buffer, 8);
+        //char_read = fread(in_buffer, sizeof(char), 8, fd);        
+
+        if (char_read < 8)
+        {
+            fprintf(stderr, "error in reading\n");
+        }
+
+        while (char_read < 8)
+        {
+            char_read += read(fd, &(in_buffer[char_read]), 8 - char_read);
+            //char_read += fread(&(in_buffer[char_read]), sizeof(char), 8 - char_read, fd);
+        }
+
+        //usleep((5 + 25) * 100);
+
+        for (int k = 0; k < 8; k++)
+        {
+            if (in_buffer[k] != out_buffer[k])
+            {
+                fprintf(stderr, "error in received data: in: %d != %d :out\n", in_buffer[k], out_buffer[k]);
+            }
+        }
+        if (out_buffer[0] == 1)
+        {
+            printf("Wrapping %d\n", i);
+        }
+    }
 }
 
 /*
