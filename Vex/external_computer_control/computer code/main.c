@@ -1,22 +1,83 @@
+#include "common.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
-#include <termios.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <pthread.h>
+
+#ifdef WINDOWS_OS
+#else
+#include <termios.h>
+#endif
+
+#include "sim.h"
 
 #define PORT_NAME "/dev/tty.usbmodem11303"
 #define BUFFER_SIZE 1024
 
 pthread_mutex_t mutex;
+pthread_barrier_t init_barrier;
+sim_param_t sim_param;
 
 int main()
 {
+    fprintf(stderr, "Starting Initialization\n");
+
     pthread_t sim_thread;
     pthread_t audio_process_thread;
-    pthread_mutex_init(&mutex, NULL);
 
+    if(pthread_mutex_init(&mutex, NULL) != 0) {
+        fprintf(stderr, "Mutex init failed\n");
+        return -1;
+    }
+
+    if (pthread_barrier_init(&init_barrier, NULL, 2) != 0)
+    {
+        fprintf(stderr, "Barrier init failed\n");
+        return -1;
+    }
+
+
+    sim_param.out = malloc(4 * sizeof(double));
+    sim_param.in = malloc(4 * sizeof(double));
+    sim_param.nb_out = 4;
+    sim_param.nb_in = 4;
+    sim_param.has_new_data = malloc(2*sizeof(char));
+
+    sim_param.has_new_data[0] = 0;
+    sim_param.out[0] = 10;
+
+    // Thread created
+    pthread_create(&sim_thread, NULL, simulate, NULL);
+
+    printf("Initialized\n");
+
+    pthread_barrier_wait(&init_barrier);
+
+    pthread_barrier_destroy(&init_barrier);
+
+    for (int i = 0; i < 10000; i++)
+    {
+        pthread_mutex_lock(&mutex);
+        sim_param.in[0] = (double) i;
+        sim_param.has_new_data[0] = 1;
+        pthread_mutex_unlock(&mutex);
+        usleep(100000);
+        pthread_mutex_lock(&mutex);
+        if (sim_param.has_new_data[1] == 1)
+        {
+            printf("Out: %f\n", sim_param.out[0]);
+            sim_param.has_new_data[1] = 0;
+        }else {
+            printf("No new data\n");
+        }
+        pthread_mutex_unlock(&mutex);
+    }
+
+    /*
     int fd = open(PORT_NAME, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0)
     {
@@ -92,6 +153,10 @@ int main()
         return -1;
     }
 
+    pthread_barrier_wait(&init_barrier);
+
+    pthread_barrier_destroy(&init_barrier);
+
     //usleep((20 + 25) * 100);
     // 13 = 1101
     // 10 = 1010
@@ -156,6 +221,7 @@ int main()
             printf("Wrapping %d\n", i);
         }
     }
+    */
 }
 
 /*
