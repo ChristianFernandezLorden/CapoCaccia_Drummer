@@ -34,7 +34,6 @@ int main() {
   int num_in = fileno(stdin);
   int num_out = fileno(stdout);
 
-  
   char endianness;
   int is_float;
   size_t char_read;
@@ -115,7 +114,7 @@ int main() {
 
   uint64_t end;
   uint64_t wait_time;
-  uint64_t step = 5 * 1000;
+  uint64_t step = 1 * 1000;
   uint64_t start = Brain.Timer.systemHighResolution();
   while (true)
   {
