@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include "portaudio.h"
+#include "audio_process.h"
 
 #define SAMPLE_RATE 192000 // 192 kHz for the amplifier used
 #define NUM_CHANNELS 2 // 1 for standard microphone, 2 in the case of the amplifier
