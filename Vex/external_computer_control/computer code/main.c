@@ -83,7 +83,7 @@ int main()
         sim_param.has_new_data[0] = 1;
         pthread_mutex_unlock(sim_param.com_mutex);
         usleep(100000);
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(sim_param.com_mutex);
         if (sim_param.has_new_data[1] == 1)
         {
             printf("Out: %f\n", sim_param.out[0]);
