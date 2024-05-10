@@ -1,12 +1,16 @@
 #pragma once
 
+#include <pthread.h>
+
 typedef struct com_data_t{
     int nb_out, nb_in;
     double *out, *in;
     char *has_new_data;
+    pthread_mutex_t *com_mutex;
 } com_data_t;
 
 typedef struct sim_param_t{
+    com_data_t* sim_com_data;
     int nb_out, nb_in, nb_states;
     void (*init)(double *, double *, double *);
     void (*system)(double *, double *, double *, double *);

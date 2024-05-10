@@ -3,17 +3,13 @@
 
 #include <pthread.h>
 #include "portaudio.h"
-
-typedef struct audio_data_t {
-	pthread_mutex_t* com_mutex;
-	int peakDetected;
-} audio_data_t;
+#include "structs.h"
 
 void startPortAudio();
 
 void listInputDevices();
 
-void startAudioStream(PaStream *stream, struct audio_data_t *threadData);
+void startAudioStream(PaStream *stream, com_data_t *threadData);
 
 void stopAudioStream(PaStream *stream);
 
@@ -23,6 +19,5 @@ int processAudio(const void *inputBuffer, void *outputBuffer,
 				 PaStreamCallbackFlags statusFlags,
 				 void *userData);
 
-void waitForPeak(struct audio_data_t *threadData);
 
 #endif // AUDIO_PROCESS_H

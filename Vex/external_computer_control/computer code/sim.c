@@ -51,7 +51,7 @@ void *simulate(void *param)
 
     int transmit_counter = 0;
 
-    pthread_barrier_wait(&init_barrier);
+    //pthread_barrier_wait(&init_barrier);
 
     struct timespec ts;
 #ifdef WINDOWS_OS

@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include "portaudio.h"
 #include "audio_process.h"
+#include "structs.h"
 
 #define SAMPLE_RATE 192000 // 192 kHz for the amplifier used
 #define NUM_CHANNELS 1 // 1 for standard microphone, 2 in the case of the amplifier
@@ -16,7 +17,7 @@ int processAudio(const void *inputBuffer, void *outputBuffer,
                  const PaStreamCallbackTimeInfo *timeInfo,
                  PaStreamCallbackFlags statusFlags,
                  void *userData) {
-    audio_data_t *threadData = (audio_data_t *)userData;
+    com_data_t *threadData = (com_data_t *)userData;
     float *input = (float *)inputBuffer;
     (void)outputBuffer; // Prevent unused variable warning
 
@@ -30,23 +31,12 @@ int processAudio(const void *inputBuffer, void *outputBuffer,
     if (maxSample > PEAK_THRESHOLD) {
         // Peak detected, signal the other thread
         pthread_mutex_lock(threadData->com_mutex);
-        threadData->peakDetected = 1;
+        threadData->has_new_data[0] = 1;
+        threadData->in[0] = maxSample;
         pthread_mutex_unlock(threadData->com_mutex);
     }
 
     return paContinue;
-}
-
-// Function for the thread to wait for peak signal
-void waitForPeak(audio_data_t *threadData) {
-    while (1) {
-        pthread_mutex_lock(threadData->com_mutex);
-        if (threadData->peakDetected) {
-            // printf("peak\n");
-            threadData->peakDetected = 0;
-        }
-        pthread_mutex_unlock(threadData->com_mutex);
-    }
 }
 
 void startPortAudio()
@@ -79,11 +69,18 @@ void listInputDevices()
     }
 }
 
-void startAudioStream(PaStream *stream, audio_data_t *threadData)
+void startAudioStream(PaStream *stream, com_data_t *threadData)
 {
 	PaError err;
 	PaStreamParameters inputParameters;
 	const PaDeviceInfo *deviceInfo;
+
+    threadData->nb_in = 0;
+    threadData->in = malloc(threadData->nb_in * sizeof(double));
+    threadData->nb_out = 1;
+    threadData->out = malloc(threadData->nb_out * sizeof(double));
+    threadData->has_new_data = malloc(2*sizeof(char));
+    threadData->has_new_data[0] = 0;
 
 	// Set up input parameters
 	inputParameters.device = AUDIO_DEVICE;

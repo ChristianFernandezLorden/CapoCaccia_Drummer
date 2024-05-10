@@ -13,56 +13,66 @@
 #include <termios.h>
 #endif
 
+// Imported library
+#include "portaudio.h"
+
 #include "sim.h"
 #include "models.h"
 #include "structs.h"
+#include "audio_process.h"
 
 #define PORT_NAME "/dev/tty.usbmodem11303"
 #define BUFFER_SIZE 1024
 
-pthread_mutex_t mutex;
-pthread_barrier_t init_barrier;
-com_data_t sim_com_data;
 
 int main()
 {
+    pthread_mutex_t sim_mutex;
+    pthread_mutex_t audio_mutex;
+    com_data_t sim_com_data;
+    com_data_t audio_com_data;
+
     fprintf(stderr, "Starting Initialization\n");
 
     sys_specific_functions_t sys_specific_functions = unconnected_hco();
 
     pthread_t sim_thread;
-    pthread_t audio_process_thread;
+    //pthread_t audio_process_thread , Auto created
     sim_param_t sim_param;
 
-    if(pthread_mutex_init(&mutex, NULL) != 0) {
+    if (pthread_mutex_init(&sim_mutex, NULL) != 0 ||
+        pthread_mutex_init(&audio_mutex, NULL) != 0)
+    {
         fprintf(stderr, "Mutex init failed\n");
         return -1;
     }
-
-    if (pthread_barrier_init(&init_barrier, NULL, 2) != 0)
-    {
-        fprintf(stderr, "Barrier init failed\n");
-        return -1;
-    }
+    sim_com_data.com_mutex = &sim_mutex;
+    audio_com_data.com_mutex = &audio_mutex;
 
     sys_specific_functions.init_sim_com(&sim_com_data);
-
-    // Thread created
     sys_specific_functions.init_sim_param(&sim_param);
-    pthread_create(&sim_thread, NULL, simulate, &sim_param);
+    sim_param.sim_com_data = &sim_com_data;
 
-    printf("Initialized\n");
+    // Thread Creation
+    PaStream *stream;
 
-    pthread_barrier_wait(&init_barrier);
+    startPortAudio();
+    startAudioStream(stream, &audio_com_data); // Launch audio thread
 
-    pthread_barrier_destroy(&init_barrier);
+    pthread_create(&sim_thread, NULL, simulate, &sim_param); // Launch sim thread
+
+    fprintf(stderr, "Initialized\n");
+
+    //pthread_barrier_wait(&init_barrier);
+
+    //pthread_barrier_destroy(&init_barrier);
 
     double voltage;
     for (int i = 0; i < 10000; i++)
     {
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(sim_com_data.com_mutex);
         voltage = sys_specific_functions.communicate(&sim_com_data, voltage);
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(sim_com_data.com_mutex);
         printf("Voltage: %f\n", voltage);
         usleep(100000);
     }

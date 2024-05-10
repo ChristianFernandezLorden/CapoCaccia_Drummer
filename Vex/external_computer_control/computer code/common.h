@@ -13,10 +13,3 @@
 #define LINUX_MAC_OS
 #endif
 
-#include <pthread.h>
-
-#include "structs.h"
-
-extern pthread_mutex_t mutex;
-extern pthread_barrier_t init_barrier;
-extern com_data_t sim_com_data;
