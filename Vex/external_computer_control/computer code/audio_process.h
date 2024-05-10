@@ -12,7 +12,7 @@ void startPortAudio();
 
 void listInputDevices();
 
-void startAudioStream(PaStream *stream, struct ThreadData *threadData);
+void startAudioStream(PaStream *stream, struct audio_data_t *threadData);
 
 void stopAudioStream(PaStream *stream);
 
@@ -22,6 +22,6 @@ int processAudio(const void *inputBuffer, void *outputBuffer,
 				 PaStreamCallbackFlags statusFlags,
 				 void *userData);
 
-void waitForPeak(struct ThreadData *threadData);
+void waitForPeak(struct audio_data_t *threadData);
 
 #endif // AUDIO_PROCESS_H

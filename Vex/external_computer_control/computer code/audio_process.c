@@ -43,7 +43,7 @@ void waitForPeak(audio_data_t *threadData) {
     while (1) {
         pthread_mutex_lock(threadData->com_mutex);
         if (threadData->peakDetected) {
-            printf("%f!\n",sample);
+            printf("peak\n");
             threadData->peakDetected = 0;
         }
         pthread_mutex_unlock(threadData->com_mutex);

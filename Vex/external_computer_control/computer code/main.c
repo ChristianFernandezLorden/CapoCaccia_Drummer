@@ -13,6 +13,8 @@
 #include <termios.h>
 #endif
 
+#include "portaudio.h"
+
 #include "sim.h"
 #include "audio_process.h"
 
