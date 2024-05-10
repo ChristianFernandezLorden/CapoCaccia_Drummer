@@ -14,8 +14,9 @@
 #endif
 
 #include <pthread.h>
-#include "sim.h"
+
+#include "structs.h"
 
 extern pthread_mutex_t mutex;
 extern pthread_barrier_t init_barrier;
-extern sim_param_t sim_param;
+extern com_data_t sim_com_data;

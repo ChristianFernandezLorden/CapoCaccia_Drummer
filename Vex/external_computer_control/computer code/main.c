@@ -14,20 +14,25 @@
 #endif
 
 #include "sim.h"
+#include "models.h"
+#include "structs.h"
 
 #define PORT_NAME "/dev/tty.usbmodem11303"
 #define BUFFER_SIZE 1024
 
 pthread_mutex_t mutex;
 pthread_barrier_t init_barrier;
-sim_param_t sim_param;
+com_data_t sim_com_data;
 
 int main()
 {
     fprintf(stderr, "Starting Initialization\n");
 
+    sys_specific_functions_t sys_specific_functions = unconnected_hco();
+
     pthread_t sim_thread;
     pthread_t audio_process_thread;
+    sim_param_t sim_param;
 
     if(pthread_mutex_init(&mutex, NULL) != 0) {
         fprintf(stderr, "Mutex init failed\n");
@@ -40,18 +45,11 @@ int main()
         return -1;
     }
 
-
-    sim_param.out = malloc(4 * sizeof(double));
-    sim_param.in = malloc(4 * sizeof(double));
-    sim_param.nb_out = 4;
-    sim_param.nb_in = 4;
-    sim_param.has_new_data = malloc(2*sizeof(char));
-
-    sim_param.has_new_data[0] = 0;
-    sim_param.out[0] = 10;
+    sys_specific_functions.init_sim_com(&sim_com_data);
 
     // Thread created
-    pthread_create(&sim_thread, NULL, simulate, NULL);
+    sys_specific_functions.init_sim_param(&sim_param);
+    pthread_create(&sim_thread, NULL, simulate, &sim_param);
 
     printf("Initialized\n");
 
@@ -59,22 +57,14 @@ int main()
 
     pthread_barrier_destroy(&init_barrier);
 
+    double voltage;
     for (int i = 0; i < 10000; i++)
     {
         pthread_mutex_lock(&mutex);
-        sim_param.in[0] = (double) i;
-        sim_param.has_new_data[0] = 1;
+        voltage = sys_specific_functions.communicate(&sim_com_data, voltage);
         pthread_mutex_unlock(&mutex);
+        printf("Voltage: %f\n", voltage);
         usleep(100000);
-        pthread_mutex_lock(&mutex);
-        if (sim_param.has_new_data[1] == 1)
-        {
-            printf("Out: %f\n", sim_param.out[0]);
-            sim_param.has_new_data[1] = 0;
-        }else {
-            printf("No new data\n");
-        }
-        pthread_mutex_unlock(&mutex);
     }
 
     /*
