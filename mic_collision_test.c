@@ -3,12 +3,13 @@
 #include <pthread.h>
 #include "portaudio.h"
 
+// Compilation command:
 // gcc -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreServices -framework CoreFoundation -o audio audio.c /usr/local/lib/libportaudio.a -lm -pthread
 
-#define SAMPLE_RATE 192000
-#define NUM_CHANNELS 2
-#define FRAME_SIZE 512
-#define PEAK_THRESHOLD 0.1
+#define SAMPLE_RATE 192000 // 192 kHz for the amplifier used
+#define NUM_CHANNELS 2 // 1 for standard microphone, 2 in the case of the amplifier
+#define FRAME_SIZE 512 // Number of samples per frame
+#define PEAK_THRESHOLD 0.1 // Threshold for peak detection, experimentally determined
 
 float sample = 0.0;
 
@@ -73,6 +74,7 @@ int main() {
         return 1;
     }
 
+    // Get number of available devices
     numDevices = Pa_GetDeviceCount();
     if (numDevices < 0) {
         fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(numDevices));
@@ -80,6 +82,7 @@ int main() {
         return 1;
     }
 
+    // List available input devices
     printf("Available input devices:\n");
     for (i = 0; i < numDevices; i++) {
         deviceInfo = Pa_GetDeviceInfo(i);
@@ -88,6 +91,7 @@ int main() {
         }
     }
 
+    // Select an input device
     printf("Select an input device: ");
     scanf("%d", &i);
 
@@ -134,7 +138,7 @@ int main() {
     // Wait for user input to stop
     printf("Press Enter to stop...\n");
     getchar();
-    getchar();
+    getchar(); // Need two getchar() calls to wait for Enter (the first one consumes the previous key press of scanf)
 
     // Stop and close the audio stream
     err = Pa_StopStream(stream);
