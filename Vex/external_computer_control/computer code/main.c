@@ -14,13 +14,15 @@
 #endif
 
 #include "sim.h"
+#include "audio_process.h"
 
 #define PORT_NAME "/dev/tty.usbmodem11303"
 #define BUFFER_SIZE 1024
 
-pthread_mutex_t mutex;
+// pthread_mutex_t mutex;
 pthread_barrier_t init_barrier;
 sim_param_t sim_param;
+audio_data_t audio_data;
 
 int main()
 {
@@ -29,7 +31,12 @@ int main()
     pthread_t sim_thread;
     pthread_t audio_process_thread;
 
-    if(pthread_mutex_init(&mutex, NULL) != 0) {
+    if(pthread_mutex_init(sim_param.com_mutex, NULL) != 0) {
+        fprintf(stderr, "Mutex init failed\n");
+        return -1;
+    }
+
+    if(pthread_mutex_init(audio_data.com_mutex, NULL) != 0) {
         fprintf(stderr, "Mutex init failed\n");
         return -1;
     }
@@ -50,8 +57,16 @@ int main()
     sim_param.has_new_data[0] = 0;
     sim_param.out[0] = 10;
 
+    audio_data.peakDetected = 0;
+
+    PaStream *stream;
+
+    startPortAudio();
+    startAudioStream(stream, &audio_data);
+
     // Thread created
     pthread_create(&sim_thread, NULL, simulate, NULL);
+    pthread_create(&audio_process_thread, NULL, waitForPeak, &audio_data);
 
     printf("Initialized\n");
 
@@ -61,10 +76,10 @@ int main()
 
     for (int i = 0; i < 10000; i++)
     {
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(sim_param.com_mutex);
         sim_param.in[0] = (double) i;
         sim_param.has_new_data[0] = 1;
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(sim_param.com_mutex);
         usleep(100000);
         pthread_mutex_lock(&mutex);
         if (sim_param.has_new_data[1] == 1)
@@ -74,8 +89,10 @@ int main()
         }else {
             printf("No new data\n");
         }
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(sim_param.com_mutex);
     }
+
+    stopAudioStream(stream);
 
     /*
     int fd = open(PORT_NAME, O_RDWR | O_NOCTTY | O_SYNC);
