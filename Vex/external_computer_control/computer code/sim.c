@@ -4,10 +4,11 @@
 
 #include <time.h>
 #include <pthread.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
 #include "sim.h"
+#include "structs.h"
 
 /// Convert seconds to milliseconds
 #define SEC_TO_MS(sec) ((sec) * 1000)
@@ -24,17 +25,33 @@
 #define NS_TO_US(ns) ((ns) / 1000)
 
 #define MICRO_STEP 50
-#define TRANSMIT_RATE 5
+#define MIN_MICRO_SLEEP_TIME 1000
+#define TRANSMIT_RATE 10
 
-void *simulate(sim_param_t *param)
+void *simulate(void *param)
 {
-    //sim_param_t *sim_param = (sim_param_t *) param;
+    sim_param_t *sim_param = (sim_param_t *) param;
 
-    double peak = 0;
-    double voltage = 0;
+    double *input = malloc(sim_param->nb_in * sizeof(double));
+    double **states = malloc(4 * sizeof(double *));
+    double **dstates = malloc(4 * sizeof(double *));
+    for (int i = 0; i < 4; i++) {
+        states[i] = malloc(sim_param->nb_states * sizeof(double));
+        dstates[i] = malloc(sim_param->nb_states * sizeof(double));
+    }
+    double *output = malloc(sim_param->nb_out * sizeof(double));
+
+    sim_param->init(input, states[0], output);
+
+    double sim_step = (double)MICRO_STEP / 1000000.0;
+    double half_sim_step = sim_step * 0.5;
+    double sixth_sim_step = sim_step / 6.0;
+    double third_sim_step = sim_step / 3.0;
+    double eigth_sim_step = sim_step / 8.0;
+
     int transmit_counter = 0;
 
-    // pthread_barrier_wait(&init_barrier);
+    pthread_barrier_wait(&init_barrier);
 
     struct timespec ts;
 #ifdef WINDOWS_OS
@@ -42,9 +59,8 @@ void *simulate(sim_param_t *param)
 #else
     clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 #endif
-    time_t start_us = SEC_TO_US(ts.tv_sec) + NS_TO_US(ts.tv_nsec);
-    time_t end_us, us_left, current_us;
-    end_us = start_us;
+    time_t end_us = SEC_TO_US(ts.tv_sec) + NS_TO_US(ts.tv_nsec);
+    time_t us_left, current_us;
 
     while (1)
     {
@@ -52,23 +68,53 @@ void *simulate(sim_param_t *param)
         transmit_counter = (transmit_counter + 1) % TRANSMIT_RATE;
         if (transmit_counter == 0)
         {
-            pthread_mutex_lock(param->com_mutex);
-            if (sim_param.has_new_data[0] == 1)
+            pthread_mutex_lock(&mutex);
+            sim_param->communicate(input, output, &sim_com_data);
+            /*
+            if (sim_com_data.has_new_data[0] == 1)
             {
-                sim_param.has_new_data[0] = 0;
-                peak = sim_param.in[0];
+                sim_com_data.has_new_data[0] = 0;
+                peak = sim_com_data.in[0];
             }
             //voltage = peak * 0.5;
-            sim_param.out[0] = voltage;
-            sim_param.has_new_data[1] = 1;
-            pthread_mutex_unlock(param->com_mutex);
+            sim_com_data.out[0] = voltage;
+            sim_com_data.has_new_data[1] = 1;
+            */
+            pthread_mutex_unlock(&mutex);
+        }
+
+        // Implement the 3/8 rule of the Runge-Kutta 4th order method
+
+        sim_param->system(input, states[0], dstates[0], output);
+
+        for (int i = 0; i < sim_param->nb_states; i++)
+        {
+            states[1][i] = states[0][i] + dstates[0][i] * third_sim_step;
+        }
+
+        sim_param->system(input, states[1], dstates[1], output);
+
+        for (int i = 0; i < sim_param->nb_states; i++)
+        {
+            states[2][i] = states[0][i] + dstates[1][i] * sim_step - dstates[0][i] * third_sim_step;
+        }
+
+        sim_param->system(input, states[2], dstates[2], output);
+
+        for (int i = 0; i < sim_param->nb_states; i++)
+        {
+            states[3][i] = states[0][i] + (dstates[0][i] - dstates[1][i] + dstates[2][i]) * sim_step;
+        }
+
+        sim_param->system(input, states[3], dstates[3], output);
+
+        for (int i = 0; i < sim_param->nb_states; i++)
+        {
+            states[0][i] = states[0][i] + (dstates[0][i] + 3 * dstates[1][i] + 3 * dstates[2][i] + dstates[3][i]) * eigth_sim_step;
         }
         
-
-        //start_us = end_us;
-        struct timespec ts;
-
-    
+        
+        struct timespec ts; 
 #ifdef WINDOWS_OS
         clock_gettime(CLOCK_MONOTONIC, &ts);
 #else
@@ -76,12 +122,21 @@ void *simulate(sim_param_t *param)
 #endif
         current_us = SEC_TO_US(ts.tv_sec) + NS_TO_US(ts.tv_nsec);
         us_left = end_us - current_us;
-        voltage = us_left;
-        if (us_left > 1000)
+        if (us_left > MIN_MICRO_SLEEP_TIME)
         {
             usleep(us_left);
         }
     }
+
+    free(input);
+    for (int i = 0; i < 4; i++) {
+        free(states[i]);
+        free(dstates[i]);
+    }
+    free(states);   
+    free(dstates);
+    free(output);
+
     pthread_exit(NULL); 
     return NULL;
 }

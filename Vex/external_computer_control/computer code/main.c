@@ -13,103 +13,59 @@
 #include <termios.h>
 #endif
 
-#include "portaudio.h"
-
 #include "sim.h"
-#include "audio_process.h"
+#include "models.h"
+#include "structs.h"
 
 #define PORT_NAME "/dev/tty.usbmodem11303"
 #define BUFFER_SIZE 1024
 
-// pthread_mutex_t mutex;
-//pthread_barrier_t init_barrier;
-sim_param_t sim_param;
-audio_data_t audio_data;
+pthread_mutex_t mutex;
+pthread_barrier_t init_barrier;
+com_data_t sim_com_data;
 
 int main()
 {
     fprintf(stderr, "Starting Initialization\n");
 
+    sys_specific_functions_t sys_specific_functions = unconnected_hco();
+
     pthread_t sim_thread;
     pthread_t audio_process_thread;
+    sim_param_t sim_param;
 
-    pthread_mutex_t mutex_sim;
-    pthread_mutex_t mutex_audio;
-    sim_param.com_mutex = &mutex_sim;
-    audio_data.com_mutex = &mutex_audio;
-
-    if(pthread_mutex_init(sim_param.com_mutex, NULL) != 0) {
+    if(pthread_mutex_init(&mutex, NULL) != 0) {
         fprintf(stderr, "Mutex init failed\n");
         return -1;
     }
 
-    if (pthread_mutex_init(audio_data.com_mutex, NULL) != 0)
+    if (pthread_barrier_init(&init_barrier, NULL, 2) != 0)
     {
-        fprintf(stderr, "Mutex init failed\n");
+        fprintf(stderr, "Barrier init failed\n");
         return -1;
     }
 
-    // if (pthread_barrier_init(&init_barrier, NULL, 2) != 0)
-    // {
-    //     fprintf(stderr, "Barrier init failed\n");
-    //     return -1;
-    // }
-
-
-    sim_param.out = malloc(4 * sizeof(double));
-    sim_param.in = malloc(4 * sizeof(double));
-    sim_param.nb_out = 4;
-    sim_param.nb_in = 4;
-    sim_param.has_new_data = malloc(2*sizeof(char));
-
-    sim_param.has_new_data[0] = 0;
-    sim_param.out[0] = 10;
-
-    audio_data.peakDetected = 0;
-
-    PaStream *stream;
-
-    startPortAudio();
-    startAudioStream(stream, &audio_data);
+    sys_specific_functions.init_sim_com(&sim_com_data);
 
     // Thread created
-    pthread_create(&sim_thread, NULL, (void*) simulate, &sim_param);
-    //pthread_create(&audio_process_thread, NULL, (void *) waitForPeak, &audio_data);
+    sys_specific_functions.init_sim_param(&sim_param);
+    pthread_create(&sim_thread, NULL, simulate, &sim_param);
 
-    fprintf(stderr, "Initialized\n");
+    printf("Initialized\n");
 
-    // pthread_barrier_wait(&init_barrier);
+    pthread_barrier_wait(&init_barrier);
 
-    // pthread_barrier_destroy(&init_barrier);
+    pthread_barrier_destroy(&init_barrier);
 
+    double voltage;
     for (int i = 0; i < 10000; i++)
     {
-        pthread_mutex_lock(sim_param.com_mutex);
-        sim_param.in[0] = (double) i;
-        sim_param.has_new_data[0] = 1;
-        pthread_mutex_unlock(sim_param.com_mutex);
-        pthread_mutex_lock(audio_data.com_mutex);
-        if (audio_data.peakDetected)
-        {
-            printf("Peak detected\n");
-            audio_data.peakDetected = 0;
-        }
-        pthread_mutex_unlock(audio_data.com_mutex);
+        pthread_mutex_lock(&mutex);
+        voltage = sys_specific_functions.communicate(&sim_com_data, voltage);
+        pthread_mutex_unlock(&mutex);
+        printf("Voltage: %f\n", voltage);
         usleep(100000);
-        /*
-        pthread_mutex_lock(sim_param.com_mutex);
-        if (sim_param.has_new_data[1] == 1)
-        {
-            printf("Out: %f\n", sim_param.out[0]);
-            sim_param.has_new_data[1] = 0;
-        }else {
-            printf("No new data\n");
-        }
-        pthread_mutex_unlock(sim_param.com_mutex);
-        */
     }
-
-    stopAudioStream(stream);
 
     /*
     int fd = open(PORT_NAME, O_RDWR | O_NOCTTY | O_SYNC);
