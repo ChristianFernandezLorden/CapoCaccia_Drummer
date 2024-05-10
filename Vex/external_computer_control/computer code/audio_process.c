@@ -15,7 +15,7 @@ int processAudio(const void *inputBuffer, void *outputBuffer,
                  const PaStreamCallbackTimeInfo *timeInfo,
                  PaStreamCallbackFlags statusFlags,
                  void *userData) {
-    struct ThreadData *threadData = (struct ThreadData *)userData;
+    audio_data_t *threadData = (struct ThreadData *)userData;
     float *input = (float *)inputBuffer;
     (void)outputBuffer; // Prevent unused variable warning
 
@@ -61,16 +61,17 @@ void startPortAudio()
 
 void listInputDevices()
 {
-	numDevices = Pa_GetDeviceCount();
+	const PaDeviceInfo *deviceInfo;
+	int numDevices = Pa_GetDeviceCount();
     if (numDevices < 0) {
         fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(numDevices));
         Pa_Terminate();
-        return 1;
+        return;
     }
 
     // List available input devices
     printf("Available input devices:\n");
-    for (i = 0; i < numDevices; i++) {
+    for (int i = 0; i < numDevices; i++) {
         deviceInfo = Pa_GetDeviceInfo(i);
         if (deviceInfo->maxInputChannels > 0) {
             printf("%d: %s\n", i, deviceInfo->name);
