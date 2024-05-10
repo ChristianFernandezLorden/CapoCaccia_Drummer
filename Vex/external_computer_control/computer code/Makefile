@@ -1,8 +1,13 @@
 ifeq ($(OS),Windows_NT)
     TARGET_EXEC = out.exe
+	EMPTY :=
+	SEPARATOR := \$(EMPTY)
+	RM = del 
 else
     #UNAME_S := $(shell uname -s)
     TARGET_EXEC = out.o
+	RM = rm 
+	SEPARATOR := /
 endif
 
 CC = gcc			# compiler to use
@@ -19,5 +24,8 @@ $(TARGET_EXEC): $(SRC_C) $(SRC_H)
 
 .PHONY: clean
 clean:
-	rm $(TARGET_EXEC)
+	$(RM).$(SEPARATOR)$(TARGET_EXEC)
+
+execute:
+	.$(SEPARATOR)$(TARGET_EXEC)
 
