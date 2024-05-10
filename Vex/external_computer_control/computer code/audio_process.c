@@ -16,7 +16,7 @@ int processAudio(const void *inputBuffer, void *outputBuffer,
                  const PaStreamCallbackTimeInfo *timeInfo,
                  PaStreamCallbackFlags statusFlags,
                  void *userData) {
-    audio_data_t *threadData = (struct ThreadData *)userData;
+    audio_data_t *threadData = (audio_data_t *)userData;
     float *input = (float *)inputBuffer;
     (void)outputBuffer; // Prevent unused variable warning
 
@@ -39,7 +39,7 @@ int processAudio(const void *inputBuffer, void *outputBuffer,
 }
 
 // Function for the thread to wait for peak signal
-void waitForPeak(struct ThreadData *threadData) {
+void waitForPeak(audio_data_t *threadData) {
     while (1) {
         pthread_mutex_lock(threadData->com_mutex);
         if (threadData->peakDetected) {
@@ -80,7 +80,7 @@ void listInputDevices()
     }
 }
 
-void startAudioStream(PaStream *stream, struct ThreadData *threadData)
+void startAudioStream(PaStream *stream, audio_data_t *threadData)
 {
 	PaError err;
 	PaStreamParameters inputParameters;
