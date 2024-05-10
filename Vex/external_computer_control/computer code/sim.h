@@ -10,4 +10,4 @@ typedef struct sim_param_t {
 } sim_param_t;
 
 
-void *simulate(void* param);
+void *simulate(sim_param_t *param);

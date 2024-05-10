@@ -67,7 +67,7 @@ int main()
     startAudioStream(stream, &audio_data);
 
     // Thread created
-    pthread_create(&sim_thread, NULL, simulate, NULL);
+    pthread_create(&sim_thread, NULL, simulate, &sim_param);
     pthread_create(&audio_process_thread, NULL, (void *) waitForPeak, &audio_data);
 
     printf("Initialized\n");

@@ -26,7 +26,7 @@
 #define MICRO_STEP 50
 #define TRANSMIT_RATE 5
 
-void *simulate(void *param)
+void *simulate(sim_param_t *param)
 {
     //sim_param_t *sim_param = (sim_param_t *) param;
 
@@ -52,7 +52,7 @@ void *simulate(void *param)
         transmit_counter = (transmit_counter + 1) % TRANSMIT_RATE;
         if (transmit_counter == 0)
         {
-            pthread_mutex_lock(&mutex);
+            pthread_mutex_lock(param->com_mutex);
             if (sim_param.has_new_data[0] == 1)
             {
                 sim_param.has_new_data[0] = 0;
@@ -61,7 +61,7 @@ void *simulate(void *param)
             //voltage = peak * 0.5;
             sim_param.out[0] = voltage;
             sim_param.has_new_data[1] = 1;
-            pthread_mutex_unlock(&mutex);
+            pthread_mutex_unlock(param->com_mutex);
         }
         
 
