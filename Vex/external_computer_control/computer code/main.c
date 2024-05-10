@@ -33,12 +33,18 @@ int main()
     pthread_t sim_thread;
     pthread_t audio_process_thread;
 
+    pthread_mutex_t mutex_sim;
+    pthread_mutex_t mutex_audio;
+    sim_param.com_mutex = &mutex_sim;
+    audio_data.com_mutex = &mutex_audio;
+
     if(pthread_mutex_init(sim_param.com_mutex, NULL) != 0) {
         fprintf(stderr, "Mutex init failed\n");
         return -1;
     }
 
-    if(pthread_mutex_init(audio_data.com_mutex, NULL) != 0) {
+    if (pthread_mutex_init(audio_data.com_mutex, NULL) != 0)
+    {
         fprintf(stderr, "Mutex init failed\n");
         return -1;
     }
@@ -67,10 +73,10 @@ int main()
     startAudioStream(stream, &audio_data);
 
     // Thread created
-    pthread_create(&sim_thread, NULL, simulate, &sim_param);
-    pthread_create(&audio_process_thread, NULL, (void *) waitForPeak, &audio_data);
+    pthread_create(&sim_thread, NULL, (void*) simulate, &sim_param);
+    //pthread_create(&audio_process_thread, NULL, (void *) waitForPeak, &audio_data);
 
-    printf("Initialized\n");
+    fprintf(stderr, "Initialized\n");
 
     // pthread_barrier_wait(&init_barrier);
 
@@ -82,7 +88,15 @@ int main()
         sim_param.in[0] = (double) i;
         sim_param.has_new_data[0] = 1;
         pthread_mutex_unlock(sim_param.com_mutex);
+        pthread_mutex_lock(audio_data.com_mutex);
+        if (audio_data.peakDetected)
+        {
+            printf("Peak detected\n");
+            audio_data.peakDetected = 0;
+        }
+        pthread_mutex_unlock(audio_data.com_mutex);
         usleep(100000);
+        /*
         pthread_mutex_lock(sim_param.com_mutex);
         if (sim_param.has_new_data[1] == 1)
         {
@@ -92,6 +106,7 @@ int main()
             printf("No new data\n");
         }
         pthread_mutex_unlock(sim_param.com_mutex);
+        */
     }
 
     stopAudioStream(stream);

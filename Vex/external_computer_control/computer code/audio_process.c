@@ -5,7 +5,7 @@
 #include "audio_process.h"
 
 #define SAMPLE_RATE 192000 // 192 kHz for the amplifier used
-#define NUM_CHANNELS 2 // 1 for standard microphone, 2 in the case of the amplifier
+#define NUM_CHANNELS 1 // 1 for standard microphone, 2 in the case of the amplifier
 #define FRAME_SIZE 512 // Number of samples per frame
 #define PEAK_THRESHOLD 0.1 // Threshold for peak detection, experimentally determined
 #define AUDIO_DEVICE 1 // Device number for the audio interface
@@ -42,7 +42,7 @@ void waitForPeak(audio_data_t *threadData) {
     while (1) {
         pthread_mutex_lock(threadData->com_mutex);
         if (threadData->peakDetected) {
-            printf("peak\n");
+            // printf("peak\n");
             threadData->peakDetected = 0;
         }
         pthread_mutex_unlock(threadData->com_mutex);
