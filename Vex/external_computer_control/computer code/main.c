@@ -22,7 +22,7 @@
 #define BUFFER_SIZE 1024
 
 // pthread_mutex_t mutex;
-pthread_barrier_t init_barrier;
+//pthread_barrier_t init_barrier;
 sim_param_t sim_param;
 audio_data_t audio_data;
 
@@ -43,11 +43,11 @@ int main()
         return -1;
     }
 
-    if (pthread_barrier_init(&init_barrier, NULL, 2) != 0)
-    {
-        fprintf(stderr, "Barrier init failed\n");
-        return -1;
-    }
+    // if (pthread_barrier_init(&init_barrier, NULL, 2) != 0)
+    // {
+    //     fprintf(stderr, "Barrier init failed\n");
+    //     return -1;
+    // }
 
 
     sim_param.out = malloc(4 * sizeof(double));
@@ -68,13 +68,13 @@ int main()
 
     // Thread created
     pthread_create(&sim_thread, NULL, simulate, NULL);
-    pthread_create(&audio_process_thread, NULL, waitForPeak, &audio_data);
+    pthread_create(&audio_process_thread, NULL, (void *) waitForPeak, &audio_data);
 
     printf("Initialized\n");
 
-    pthread_barrier_wait(&init_barrier);
+    // pthread_barrier_wait(&init_barrier);
 
-    pthread_barrier_destroy(&init_barrier);
+    // pthread_barrier_destroy(&init_barrier);
 
     for (int i = 0; i < 10000; i++)
     {

@@ -16,6 +16,6 @@
 #include <pthread.h>
 #include "sim.h"
 
-extern pthread_mutex_t mutex;
-extern pthread_barrier_t init_barrier;
+//extern pthread_mutex_t mutex;
+//extern pthread_barrier_t init_barrier;
 extern sim_param_t sim_param;
