@@ -30,7 +30,6 @@ int processAudio(const void *inputBuffer, void *outputBuffer,
     if (maxSample > PEAK_THRESHOLD) {
         // Peak detected, signal the other thread
         pthread_mutex_lock(threadData->com_mutex);
-        sample = maxSample;
         threadData->peakDetected = 1;
         pthread_mutex_unlock(threadData->com_mutex);
     }
@@ -56,7 +55,7 @@ void startPortAudio()
 	err = Pa_Initialize();
     if (err != paNoError) {
         fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
-        return 1;
+        return;
     }
 }
 
@@ -99,7 +98,7 @@ void startAudioStream(PaStream *stream, audio_data_t *threadData)
 	{
 		fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
         Pa_Terminate();
-        return 1;
+        return;
 	}
 
 	// Start the audio stream
@@ -109,7 +108,7 @@ void startAudioStream(PaStream *stream, audio_data_t *threadData)
 		fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
         Pa_CloseStream(stream);
         Pa_Terminate();
-        return 1;
+        return;
 	}
 }
 
@@ -120,7 +119,7 @@ void stopAudioStream(PaStream *stream)
 	if (err != paNoError)
 	{
 		 fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
-		return 1;
+		return;
 	}
 	Pa_CloseStream(stream);
     Pa_Terminate();

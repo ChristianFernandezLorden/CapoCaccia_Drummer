@@ -2,6 +2,7 @@
 #define AUDIO_PROCESS_H
 
 #include <pthread.h>
+#include "portaudio.h"
 
 typedef struct audio_data_t {
 	pthread_mutex_t* com_mutex;
