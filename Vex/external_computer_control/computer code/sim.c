@@ -10,6 +10,8 @@
 #include "sim.h"
 #include "structs.h"
 
+#include <stdio.h>
+
 /// Convert seconds to milliseconds
 #define SEC_TO_MS(sec) ((sec) * 1000)
 /// Convert seconds to microseconds
@@ -57,19 +59,20 @@ void *simulate(void *param)
 #ifdef WINDOWS_OS
     clock_gettime(CLOCK_MONOTONIC, &ts);
 #else
-    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+    clock_gettime(_CLOCK_MONOTONIC, &ts);
 #endif
     time_t end_us = SEC_TO_US(ts.tv_sec) + NS_TO_US(ts.tv_nsec);
     time_t us_left, current_us;
 
+    int i = 0;
     while (1)
     {
         end_us = end_us + MICRO_STEP;
         transmit_counter = (transmit_counter + 1) % TRANSMIT_RATE;
         if (transmit_counter == 0)
         {
-            pthread_mutex_lock(&mutex);
-            sim_param->communicate(input, output, &sim_com_data);
+            pthread_mutex_lock(sim_param->sim_com_data->com_mutex);
+            sim_param->communicate(input, output, sim_param->sim_com_data);
             /*
             if (sim_com_data.has_new_data[0] == 1)
             {
@@ -80,7 +83,7 @@ void *simulate(void *param)
             sim_com_data.out[0] = voltage;
             sim_com_data.has_new_data[1] = 1;
             */
-            pthread_mutex_unlock(&mutex);
+            pthread_mutex_unlock(sim_param->sim_com_data->com_mutex);
         }
 
         // Implement the 3/8 rule of the Runge-Kutta 4th order method
@@ -115,17 +118,16 @@ void *simulate(void *param)
         
         
         struct timespec ts; 
+        do { // Busywait
 #ifdef WINDOWS_OS
-        clock_gettime(CLOCK_MONOTONIC, &ts);
+            clock_gettime(CLOCK_MONOTONIC, &ts);
 #else
-        clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+            clock_gettime(_CLOCK_MONOTONIC, &ts);
 #endif
-        current_us = SEC_TO_US(ts.tv_sec) + NS_TO_US(ts.tv_nsec);
-        us_left = end_us - current_us;
-        if (us_left > MIN_MICRO_SLEEP_TIME)
-        {
-            usleep(us_left);
-        }
+            current_us = SEC_TO_US(ts.tv_sec) + NS_TO_US(ts.tv_nsec);
+            us_left = end_us - current_us;
+        }while (us_left > MIN_MICRO_SLEEP_TIME);
+        
     }
 
     free(input);

@@ -1,15 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <string.h>
 #include "portaudio.h"
 #include "audio_process.h"
 #include "structs.h"
 
 #define SAMPLE_RATE 192000 // 192 kHz for the amplifier used
-#define NUM_CHANNELS 1 // 1 for standard microphone, 2 in the case of the amplifier
+#define NUM_CHANNELS 2 // 1 for standard microphone, 2 in the case of the amplifier
 #define FRAME_SIZE 512 // Number of samples per frame
 #define PEAK_THRESHOLD 0.1 // Threshold for peak detection, experimentally determined
-#define AUDIO_DEVICE 1 // Device number for the audio interface
+#define AUDIO_DEVICE 0 // Device number for the audio interface
+#define AUDIO_DEVICE_NAME "Scarlett Solo USB"
 
 // Function to process audio samples
 int processAudio(const void *inputBuffer, void *outputBuffer,
@@ -82,8 +84,37 @@ void startAudioStream(PaStream *stream, com_data_t *threadData)
     threadData->has_new_data = malloc(2*sizeof(char));
     threadData->has_new_data[0] = 0;
 
-	// Set up input parameters
-	inputParameters.device = AUDIO_DEVICE;
+    int numDevices = Pa_GetDeviceCount();
+    if (numDevices < 0)
+    {
+        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(numDevices));
+        Pa_Terminate();
+        return;
+    }
+
+    int device = -1;
+    for (int i = 0; i < numDevices; i++)
+    {
+        deviceInfo = Pa_GetDeviceInfo(i);
+        if (deviceInfo->maxInputChannels > 0)
+        {
+            if (strcmp(deviceInfo->name, AUDIO_DEVICE_NAME) == 0) {
+                device = i;
+                printf("Device %d chosen as input.\n", device);
+                break;
+            }
+        }
+    }
+
+    if (device == -1)
+    {
+        fprintf(stderr, "Audio device not found.\n");
+        Pa_Terminate();
+        exit(-1);
+    }
+
+    // Set up input parameters
+	inputParameters.device = device;
 	inputParameters.channelCount = NUM_CHANNELS;
 	inputParameters.sampleFormat = paFloat32;
 	inputParameters.suggestedLatency = Pa_GetDeviceInfo(inputParameters.device)->defaultLowInputLatency;

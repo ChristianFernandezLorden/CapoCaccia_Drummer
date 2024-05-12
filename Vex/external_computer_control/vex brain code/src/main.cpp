@@ -13,13 +13,15 @@
 
 #include "vex.h"
 #include <stdio.h>
+#include <unistd.h>
 
 using namespace vex;
 using namespace std;
 
 //vex::PORT22;
 
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 8192
+#define COM_WAIT_MILLI 2
 
 int main() {
   // Initializing Robot Configuration. DO NOT REMOVE!
@@ -28,8 +30,8 @@ int main() {
   
   Brain.Screen.print("Waiting for connection");
 
-  char in_buffer[BUFFER_SIZE];
-  char out_buffer[BUFFER_SIZE];
+  uint8_t in_buffer[BUFFER_SIZE];
+  uint8_t out_buffer[BUFFER_SIZE];
 
   int num_in = fileno(stdin);
   int num_out = fileno(stdout);
@@ -59,10 +61,17 @@ int main() {
   computer.send(buffer, nb);
   computer.receive(buffer, 100, 10000000);*/
   
+  serial_link computer = serial_link(num_in, "computer", linkType::raw);
+
   wait(100, msec);
+
+  vexSerialWriteBuffer(num_out, (uint8_t *)"ready", 5);
+  vexSerialPeekChar(num_in);
+
 
   //char_read = fread(in_buffer, sizeof(char), 6, stdin);
   char_read = read(num_in, in_buffer, 6);
+  //char_read = computer.receive(in_buffer, 6, 1000000);
   if (char_read == 0)
   {
     Brain.Screen.clearLine(1);
@@ -84,6 +93,10 @@ int main() {
 
   if (double_size_computer == sizeof(float)) {
     is_float = 1;
+    Brain.Screen.clearLine(1);
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("Error: single precicion float size (%d B) not supported.", double_size_computer);
+    return -1;
   } else if (double_size_computer == sizeof(double)) {
     is_float = 0;
   } else {
@@ -100,6 +113,7 @@ int main() {
   out_buffer[4] = endianness;
   //char_written = fwrite(out_buffer, sizeof(char), 5, stdout);
   char_written = write(num_out, out_buffer, 5);
+  //char_written = computer.send(out_buffer, 5);
 
   if (char_written != 5) {
     Brain.Screen.clearLine(1);
@@ -110,18 +124,22 @@ int main() {
 
   Brain.Screen.clearLine(1);
   Brain.Screen.setCursor(1, 1);
-  Brain.Screen.print("Handshake done. Connection established.");
+  Brain.Screen.print("Handshake done. %s | %s.", num_in, num_out);
 
   uint64_t end;
   uint64_t wait_time;
-  uint64_t step = 1 * 1000;
+  uint64_t step = COM_WAIT_MILLI * 1000;
   uint64_t start = Brain.Timer.systemHighResolution();
+  double voltage = 0.0;
+  int i = 0;
   while (true)
   {
     end = start + step;
     //wait(1, msec);
     //char_read = fread(in_buffer, sizeof(char), 8, stdin);
-    char_read = read(num_in, in_buffer, 8);
+    size_t char_to_read = sizeof(double) + 4*sizeof(char);
+    char_read = read(num_in, in_buffer, char_to_read);
+    //char_read = computer.receive(in_buffer, char_to_read, step);
 
     /*
     if (char_read == 0)
@@ -130,26 +148,45 @@ int main() {
       Brain.Screen.setCursor(2, 1);
       Brain.Screen.print("No data read.");
       continue;
-    }
-    */
-    while (char_read < 8)
+    }*/
+
+    while (char_read < char_to_read)
     {
-      //char_read += fread(&(in_buffer[char_read]), sizeof(char), 8-char_read, stdin);
-      char_read += read(num_in, &(in_buffer[char_read]), 8-char_read);
+      // char_read += fread(&(in_buffer[char_read]), sizeof(char), 8-char_read, stdin);
+      Brain.Screen.clearLine(3);
+      Brain.Screen.setCursor(3, 1);
+      Brain.Screen.print("Waiting for reading more data.");
+      return -1;
+      //char_read += read(num_in, &(in_buffer[char_read]), char_to_read - char_read);
     }
 
-    for (int k = 0; k < char_read; k++)
+    if (in_buffer[0] != 0x01 || in_buffer[1] != 0x20 || in_buffer[2] != 0x03 || in_buffer[3] != 0x40)
     {
-      out_buffer[k] = in_buffer[k];	
+      Brain.Screen.clearLine(2);
+      Brain.Screen.setCursor(2, 1);
+      Brain.Screen.print("Wrong header reading data.");
+      return -1;
     }
+    voltage = *((double *)&(in_buffer[4]));
+
+    size_t char_to_write = 4 * sizeof(char);
+    out_buffer[0] = 0x10;
+    out_buffer[1] = 0x02;
+    out_buffer[2] = 0x30;
+    out_buffer[3] = 0x04;
 
     //char_written = fwrite(out_buffer, sizeof(char), char_read, stdout);
-    char_written = write(num_out, out_buffer, char_read);
+    char_written = write(num_out, out_buffer, char_to_write);
+    //char_written = computer.send(out_buffer, char_to_write);
 
-    while (char_written < 8)
+    while (char_written < char_to_write)
     {
-      //char_written += fwrite(&(out_buffer[char_written]), sizeof(char), char_read - char_written, stdout);
-      char_written += write(num_out, &(out_buffer[char_written]), char_read - char_written);
+      // char_written += fwrite(&(out_buffer[char_written]), sizeof(char), char_read - char_written, stdout);
+      Brain.Screen.clearLine(3);
+      Brain.Screen.setCursor(3, 1);
+      Brain.Screen.print("Waiting for writing more data.");
+      return -1;
+      //char_written += write(num_out, &(out_buffer[char_written]), char_to_write - char_written);
     }
 
     /*
@@ -164,8 +201,20 @@ int main() {
       Brain.Screen.print("Data written (%d). Starts with %d.", char_written, in_buffer[0]);
     }
     */
+    PendulumMotor.spin(fwd, voltage, voltageUnits::mV);
+
+    
+    i = (i+1) % 199;
+    if (i == 0)
+    {
+      Brain.Screen.clearLine(2);
+      Brain.Screen.setCursor(2, 1);
+      Brain.Screen.print("Voltage %lf mV.", voltage);
+    }
+    
+
     uint64_t now = Brain.Timer.systemHighResolution();
-    if (end > now)
+    if (end > now+1000)
     { // Sleep is necessary
       wait_time = ((double)(end - Brain.Timer.systemHighResolution())) / 1000.0;
       wait(wait_time, msec);

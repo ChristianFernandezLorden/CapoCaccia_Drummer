@@ -12,20 +12,25 @@ endif
 
 CC = gcc			# compiler to use
 
-LINKERFLAG = -lm -pthread
+#  -D _POSIX_C_SOURCE=200809L
+# gcc -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreServices -framework CoreFoundation -o test *.c /usr/local/lib/libportaudio.a -lm -pthread
+LINKERFLAG = -lm -pthread /usr/local/lib/libportaudio.a -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreServices -framework CoreFoundation
+OPTIMIZATION = -O1
 
 SRC_C  = $(wildcard *.c)
 SRC_C += $(wildcard models/*.c)
 
 SRC_H  = $(wildcard *.h)
 
+
 $(TARGET_EXEC): $(SRC_C) $(SRC_H)
-	gcc $(SRC_C) -o $@ $(CCFLAGS) $(LINKERFLAG)
+	gcc $(SRC_C) -o $@ $(CCFLAGS) $(LINKERFLAG) $(OPTIMIZATION)
 
 .PHONY: clean
-clean:
+clean: 
 	$(RM).$(SEPARATOR)$(TARGET_EXEC)
 
-execute:
+.PHONY: execute
+execute: $(TARGET_EXEC)
 	.$(SEPARATOR)$(TARGET_EXEC)
 
